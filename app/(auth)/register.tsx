@@ -78,6 +78,7 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     // Valider tous les champs
+    // console.log("BALALALLALALAL")
     const allErrors: FormErrors = {
       username: validateUsername(username),
       email: validateEmail(email),
@@ -105,6 +106,7 @@ export default function RegisterScreen() {
       await setAuth(data.token, data.user, data.refreshToken ?? '');
       router.replace('/(tabs)');
     } catch (err: any) {
+      console.log(err)
       const status = err?.response?.status;
       const code = err?.response?.data?.code;
       const message = err?.response?.data?.message;

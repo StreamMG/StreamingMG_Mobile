@@ -50,6 +50,7 @@ const [loaded, error] = useFonts({
 
       <Stack screenOptions={{ headerShown: false }}>
         {/* Groupes tab et auth */}
+        {/* <Stack.Screen name="(auth)"   options={{ headerShown: false }} /> */}
         <Stack.Screen name="(tabs)"   options={{ headerShown: false }} />
         <Stack.Screen name="(auth)"   options={{ headerShown: false }} />
 

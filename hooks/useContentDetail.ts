@@ -57,7 +57,7 @@ export type AccessStatus =
   | 'error';
 
 interface UseContentDetailReturn {
-  content: ContentDetail | null;
+  content: { content: ContentDetail}| null;
   tutorial: TutorialData | null;
   accessStatus: AccessStatus;
   loading: boolean;
@@ -65,7 +65,6 @@ interface UseContentDetailReturn {
   refresh: () => void;
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useContentDetail(id: string): UseContentDetailReturn {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -84,7 +83,8 @@ export function useContentDetail(id: string): UseContentDetailReturn {
 
     try {
       // 1. Métadonnées publiques
-      const { data: detail } = await apiClient.get<ContentDetail>(`/contents/${id}`);
+      const { data: detailData } = await apiClient.get<{content: ContentDetail}>(`/contents/${id}`);
+      const {content:detail}=detailData
       setContent(detail);
 
       // 2. Déterminer l'accès côté client (optimiste — le vrai contrôle est backend)
@@ -147,7 +147,7 @@ export function useContentDetail(id: string): UseContentDetailReturn {
     fetchDetail();
   }, [fetchDetail]);
 
-  return { content, tutorial, accessStatus, loading, error, refresh: fetchDetail };
+  return { content: content ? { content } : null, tutorial, accessStatus, loading, error, refresh: fetchDetail };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
