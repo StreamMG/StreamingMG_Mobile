@@ -69,10 +69,7 @@ server.post('/api/contents/:id/view', (req, res) => res.json({ viewCount: 999 })
 
 server.get('/api/contents', (req, res) => {
   let contents = [...router.db.getState().contents];
-  const { type, category, subCategory, accessType, isTutorial, search, limit = 20, page = 1 } = req.query;
-  if (type)        contents = contents.filter(c => c.type === type);
-  if (category)    contents = contents.filter(c => c.category === category);
-  if (subCategory) contents = contents.filter(c => c.subCategory === subCategory);
+  const { accessType, isTutorial, search, limit = 20, page = 1 } = req.query;
   if (accessType) contents = contents.filter(c => c.accessType === accessType);
   if (isTutorial) contents = contents.filter(c => c.isTutorial === (isTutorial === 'true'));
   if (search)     contents = contents.filter(c =>
