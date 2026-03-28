@@ -4,7 +4,10 @@ import { BASE_URL } from '@/lib/theme';
 export const apiClient = axios.create({
   baseURL: `${BASE_URL}/api`,
   timeout: 10000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 
+    'Content-Type': 'application/json',
+    // 'User-Agent': 'MobileApp' // <--- Aligné avec le player
+  },
 });
 
 apiClient.interceptors.response.use(

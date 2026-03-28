@@ -31,13 +31,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient } from '@/lib/apiClient';
-import { colors }    from '@/lib/theme';
-
-// ─── Constantes ───────────────────────────────────────────────────────────────
-
-const BASE_URL = __DEV__
-  ? 'http://localhost:3001'
-  : 'https://api.streamMG.railway.app';
+import { BASE_URL, colors }    from '@/lib/theme';
 
 const HISTORY_INTERVAL_MS = 10_000;
 
@@ -134,7 +128,10 @@ export default function VideoPlayerScreen() {
   // ── Playback status ─────────────────────────────────────────────────────────
 
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    // console.log("NETER")
+    // console.log(videoRef)
     if (!status.isLoaded) return;
+
     positionRef.current = (status.positionMillis ?? 0) / 1000;
     durationRef.current = (status.durationMillis ?? 0) / 1000;
 
@@ -147,9 +144,9 @@ export default function VideoPlayerScreen() {
     }
 
     // Token expiré (10 min) → renouveler
-    if (status.error) {
-      loadToken();
-    }
+    // if (status.erro) {
+    //   loadToken();
+    // }
   }, [saveHistory]);
 
   // ── Contrôles ───────────────────────────────────────────────────────────────
@@ -210,7 +207,7 @@ export default function VideoPlayerScreen() {
       >
         <Video
           ref={videoRef}
-          source={{ uri: hlsUrl! }}
+          source={{ uri: hlsUrl!}}
           style={StyleSheet.absoluteFillObject}
           resizeMode={ResizeMode.CONTAIN}
           shouldPlay
