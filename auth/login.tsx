@@ -54,7 +54,6 @@ export default function LoginScreen() {
   // ─── Soumission ──────────────────────────────────────────────────────────────
 
   const handleLogin = async () => {
-      console.log("ENTER SUCCESFULLY")
     const emailError = validateEmail(email);
     const passwordError = !password ? 'Le mot de passe est requis' : null;
 
@@ -71,11 +70,10 @@ export default function LoginScreen() {
         email: email.trim().toLowerCase(),
         password,
       });
+
       await setAuth(data.token, data.user, data.refreshToken ?? '');
       router.replace('/(tabs)');
     } catch (err: any) {
-      console.log("- - - - - - -")
-      console.log(err)
       const status = err?.response?.status;
       const code = err?.response?.data?.code;
 
@@ -84,8 +82,6 @@ export default function LoginScreen() {
       } else if (status === 429) {
         setErrors({ global: 'Trop de tentatives. Réessayez dans 15 minutes.' });
       } else {
-        // console.error('Login error:', err);
-        // alert(err)
         setErrors({ global: 'Une erreur est survenue. Veuillez réessayer.' });
       }
     } finally {
@@ -114,7 +110,7 @@ export default function LoginScreen() {
             className="text-base font-semibold ml-2"
             style={{ color: colors.primary, fontFamily: 'Sora_600SemiBold' }}
           >
-            
+            Connexion
           </Text>
         </View>
 
@@ -255,7 +251,8 @@ export default function LoginScreen() {
                 className="text-sm"
                 style={{ color: colors.primary, fontFamily: 'DMSans_500Medium' }}
               >
-                {"S'inscrire"}</Text>
+                S'inscrire
+              </Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
