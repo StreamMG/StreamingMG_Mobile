@@ -74,6 +74,11 @@ export default function LoginScreen() {
       await setAuth(data.token, data.user, data.refreshToken ?? '');
       router.replace('/(tabs)');
     } catch (err: any) {
+      // console.log("#####################################################");
+      // console.log("Login error:", err);
+      // console.log("Response data:", err?.response?.data);
+      // console.log("Response status:", err?.response?.status);
+      // console.log("#####################################################");
       const status = err?.response?.status;
       const code = err?.response?.data?.code;
 
@@ -251,7 +256,7 @@ export default function LoginScreen() {
                 className="text-sm"
                 style={{ color: colors.primary, fontFamily: 'DMSans_500Medium' }}
               >
-                S'inscrire
+                {"S'inscrire"}
               </Text>
             </TouchableOpacity>
           </View>

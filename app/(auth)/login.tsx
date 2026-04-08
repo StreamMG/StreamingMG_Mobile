@@ -77,6 +77,8 @@ export default function LoginScreen() {
       await setAuth(data.token, data.user, data.refreshToken ?? '');
       router.replace('/(tabs)');
     } catch (err: any) {
+      console.log("###")
+      console.log(err)
       const status = err?.response?.status;
       const code = err?.response?.data?.code;
 

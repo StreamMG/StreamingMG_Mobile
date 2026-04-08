@@ -69,7 +69,10 @@ server.post('/api/contents/:id/view', (req, res) => res.json({ viewCount: 999 })
 
 server.get('/api/contents', (req, res) => {
   let contents = [...router.db.getState().contents];
-  const { accessType, isTutorial, search, limit = 20, page = 1 } = req.query;
+  const { type, category, subCategory, accessType, isTutorial, search, limit = 20, page = 1 } = req.query;
+  if (type)        contents = contents.filter(c => c.type === type);
+  if (category)    contents = contents.filter(c => c.category === category);
+  if (subCategory) contents = contents.filter(c => c.subCategory === subCategory);
   if (accessType) contents = contents.filter(c => c.accessType === accessType);
   if (isTutorial) contents = contents.filter(c => c.isTutorial === (isTutorial === 'true'));
   if (search)     contents = contents.filter(c =>
@@ -140,6 +143,39 @@ server.get('/api/audio/:id/url', (_, res) =>
 server.use('/api', router);
 
 // 0.0.0.0 → accessible depuis le réseau local (Expo Go sur téléphone)
+
+// ─── Paiement ────────────────────────────────────────────────────────────────
+
+server.post("/api/payment/subscribe", (req, res) => {
+  const { plan } = req.body;
+  if (!["monthly","annual"].includes(plan))
+    return res.status(400).json({ message: "Plan invalide", code: "INVALID_PLAN" });
+  res.json({ clientSecret: "pi_mock_secret_" + Date.now(), amount: plan === "monthly" ? 500000 : 5000000, currency: "mga" });
+});
+
+server.get("/api/payment/status", (req, res) => {
+  res.json({ isPremium: true, premiumExpiry: "2027-01-01T00:00:00.000Z", plan: "monthly" });
+});
+
+server.post("/api/payment/purchase", (req, res) => {
+  const db = router.db.getState();
+  const content = db.contents.find(c => c._id === req.body.contentId);
+  if (!content) return res.status(404).json({ message: "Contenu introuvable", code: "CONTENT_NOT_FOUND" });
+  res.json({ clientSecret: "pi_mock_" + Date.now(), amount: content.price ?? 0, currency: "mga", contentTitle: content.title });
+});
+
+server.get("/api/payment/purchases", (_, res) => res.json({ purchases: [] }));
+
+// ─── Téléchargement ──────────────────────────────────────────────────────────
+
+server.post("/api/download/:id", (req, res) => {
+  res.json({
+    aesKeyHex: "a3f9b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
+    ivHex: "b7c2d3e4f5a6b7c8d9e0f1a2",
+    signedUrl: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3",
+    expiresIn: 900,
+  });
+});
 server.listen(3001, '0.0.0.0', () => {
   const { networkInterfaces } = require('os');
   const nets = networkInterfaces();

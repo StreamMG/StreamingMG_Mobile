@@ -77,19 +77,31 @@ export function useContentDetail(id: string): UseContentDetailReturn {
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState<string | null>(null);
 
-  const fetchDetail = useCallback(async () => {
-    if (!id) return;
-    setLoading(true);
-    setError(null);
+const fetchDetail = useCallback(async () => {
+  if (!id) return;
+  setLoading(true);
+  setError(null);
 
-    try {
-      // 1. Métadonnées publiques
-      const { data: detail } = await apiClient.get<ContentDetail>(`/contents/${id}`);
-      setContent(detail);
+  try {
+    // MODIFICATION ICI : On déstructure "data" de la réponse Axios, 
+    // puis on récupère la propriété interne (ex: "content" ou "data")
+    const response = await apiClient.get<{ content: ContentDetail }>(`/contents/${id}`);
+    
+    // On récupère l'objet réel. 
+    // Si ton API renvoie { data: { contents: {...} } }, utilise response.data.contents
+    const detail = response.data.content; 
+    // console.log("-- - - - - - - - - - - -  - - - - ----")
+    // console.log(response.data)
 
-      // 2. Déterminer l'accès côté client (optimiste — le vrai contrôle est backend)
-      const access = resolveAccessStatus(detail, isAuthenticated, user);
-      setAccessStatus(access);
+    if (!detail) {
+        throw new Error("Format de données invalide");
+    }
+
+    setContent(detail);
+
+    // Le reste du code utilise "detail", donc il reste inchangé
+    const access = resolveAccessStatus(detail, isAuthenticated, user);
+    setAccessStatus(access);
 
       // 3. Leçons tutoriel — seulement si tutoriel ET accès probable
       if (detail.isTutorial && access === 'granted') {

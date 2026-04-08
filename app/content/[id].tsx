@@ -92,6 +92,8 @@ export default function ContentDetailScreen() {
   const thumbnailUri = content.thumbnail.startsWith('http')
     ? content.thumbnail
     : `${BASE_URL}${content.thumbnail}`;
+    console.log("### thumbnailUri:", thumbnailUri);
+    console.log("### content.thumbnail:", content.thumbnail);
 
   const canAccess = accessStatus === 'granted';
   const isVideo   = content.type === 'video';

@@ -32,6 +32,7 @@ import { Badge, AccessType } from '@/components/ui/Badge';
 import { StarRating } from '@/components/ui/StarRating';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { colors, spacing, radius } from '@/lib/theme';
+import {BASE_URL }from '@/lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ function formatDuration(s: number): string {
 
 function buildUri(thumbnail: string, base?: string): string {
   if (thumbnail.startsWith('http')) return thumbnail;
-  const root = base ?? (__DEV__ ? 'http://localhost:3001' : 'https://api.streamMG.railway.app');
+  const root = base ?? (__DEV__ ? BASE_URL : 'https://api.streamMG.railway.app');
   return `${root}${thumbnail}`;
 }
 
