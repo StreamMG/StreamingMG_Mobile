@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useDownloadStore } from '@/stores/downloadStore';
-import { API_BASE_URL, colors } from '@/lib/theme';
+import { BASE_URL, colors } from '@/lib/theme';
 
 export default function OfflineScreen() {
   const { downloads, removeDownload } = useDownloadStore();
@@ -68,7 +68,7 @@ export default function OfflineScreen() {
           renderItem={({ item }) => {
             const thumbnailUri = item.thumbnail?.startsWith('http')
               ? item.thumbnail
-              : `${API_BASE_URL}${item.thumbnail}`;
+              : `${BASE_URL}${item.thumbnail}`;
 
             return (
               <TouchableOpacity

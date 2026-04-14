@@ -16,8 +16,9 @@
  * Ne plus écrire "localhost:3001" nulle part ailleurs.
  */
 export const BASE_URL = __DEV__
-  ? 'http://192.168.43.147:3001'          // ← Remplace par ton IP
-  : 'https://api.streamMG.railway.app';
+  ? 
+   "http://192.168.43.169:3001"      // ← Remplace par ton IP
+  : process.env.REMOTE_URL;
 
 // ─── Couleurs ─────────────────────────────────────────────────────────────────
 

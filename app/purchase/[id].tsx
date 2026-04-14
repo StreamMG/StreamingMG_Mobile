@@ -22,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { usePurchaseStore } from '@/stores/purchaseStore';
 import { apiClient }        from '@/lib/apiClient';
-import { API_BASE_URL, colors } from '@/lib/theme';
+import {BASE_URL, colors } from '@/lib/theme';
 
 export default function PurchaseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -93,7 +93,7 @@ export default function PurchaseScreen() {
 
   const thumbnailUri = content?.thumbnail?.startsWith('http')
     ? content.thumbnail
-    : `${API_BASE_URL}${content?.thumbnail}`;
+    : `${BASE_URL}${content?.thumbnail}`;
 
   return (
     <SafeAreaView style={s.root} edges={['top', 'bottom']}>
@@ -116,7 +116,7 @@ export default function PurchaseScreen() {
             </View>
             <Text style={s.successTitle}>Achat réussi !</Text>
             <Text style={s.successSubtitle}>
-              "{content?.title}" est maintenant accessible en permanence.
+              {content?.title} est maintenant accessible en permanence.
             </Text>
             <TouchableOpacity
               style={[s.ctaBtn, { backgroundColor: colors.teal }]}

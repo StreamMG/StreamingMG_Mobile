@@ -86,6 +86,7 @@ export default function AudioPlayerScreen() {
     setLoadingLocal(true);
     setError(null);
     try {
+      console.log("AVANT FECTH url audio")
       const { data } = await apiClient.get(`/audio/${id}/url`);
 
       const coverArt = data.metadata.coverArt?.startsWith('http')
@@ -112,22 +113,26 @@ export default function AudioPlayerScreen() {
       }
 
       // Créer et démarrer le son
+      console.log("AVANT LE CHARGEMENT DU SON")
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUrl },
         { shouldPlay: true },
         onPlaybackUpdate
       );
+      console.log("APRES")
       soundRef.current = sound;
       setLoading(false);
       play();
-
+      console.log("APRES LANCEMENT")
       // Incrémenter vues
       apiClient.post(`/contents/${id}/view`).catch(() => {});
+      console.log("APRES FETCH VIEW")
 
     } catch (e: any) {
       if (e?.response?.status === 403) {
         router.back();
       } else {
+        console.log("Erreur de chargement audio:", e.message);
         setError('Impossible de charger l\'audio.');
       }
     } finally {

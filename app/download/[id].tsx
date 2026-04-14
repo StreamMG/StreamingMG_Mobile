@@ -57,7 +57,7 @@ export default function DownloadScreen() {
     return () => {
       // Ne pas annuler si on quitte — le download continue en arrière-plan
     };
-  }, [id]);
+  }, [id, isDownloaded, start]);
 
   // ── Rendu ──────────────────────────────────────────────────────────────────
 

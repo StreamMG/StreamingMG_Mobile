@@ -64,7 +64,10 @@ export default function ContentDetailScreen() {
 
   const handleDownload  = useCallback(() => { if (content) router.push(`/download/${content._id}`); }, [content]);
   const handleSubscribe = useCallback(() => router.push('/subscribe'), []);
-  const handlePurchase  = useCallback(() => { if (content) router.push(`/purchase/${content._id}`); }, [content]);
+  const handlePurchase = useCallback(() => {
+  if (!content) return;
+  router.push({ pathname: '/purchase/[id]', params: { id: content._id } });
+}, [content]);
   const handleLogin     = useCallback(() => router.push('/(auth)/login'), []);
 
   // ── États ────────────────────────────────────────────────────────────────────
@@ -328,7 +331,7 @@ function BottomActionsBar({ canDownload, onShare, onDownload, onDownloadBlocked 
         icon="download-outline"
         label="Hors-ligne"
         onPress={canDownload ? onDownload : onDownloadBlocked}
-        dimmed={!canDownload}
+        dimmed={!canDownload}  
       />
     </View>
   );

@@ -72,10 +72,23 @@ export default function LoginScreen() {
         email: email.trim().toLowerCase(),
         password,
       });
-
-
+    //  console.log("-----------")
+    //   console.log(data);
       await setAuth(data.token, data.user, data.refreshToken ?? '');
-      router.replace('/(tabs)');
+      switch (data.user.role) {
+        case 'admin':
+          router.replace('/admin');
+          break;
+        case  "provider":
+          router.replace('/provider');
+          break;
+        case  "user":
+          router.replace('/(tabs)');
+          break;
+        default:
+          router.replace('/(tabs)');
+      }
+      
     } catch (err: any) {
       console.log("###")
       console.log(err)

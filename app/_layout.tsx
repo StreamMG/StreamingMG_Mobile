@@ -14,6 +14,7 @@ import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
+import '../styles/global.css';
 import {
   Sora_400Regular,
   Sora_500Medium,
@@ -33,7 +34,7 @@ import { MiniPlayer }      from '@/components/player/MiniPlayer';
 export { ErrorBoundary } from 'expo-router';
 
 export const unstable_settings = {
-  initialRouteName: '(tabs)',
+  initialRouteName: '(auth)',
 };
 
 SplashScreen.preventAutoHideAsync();
@@ -61,6 +62,7 @@ export default function RootLayout() {
 
       <Stack screenOptions={{ headerShown: false }}>
         {/* Groupes tab et auth */}
+        {/* <Stack.Screen name="(auth)"   options={{ headerShown: false }} /> */}
         <Stack.Screen name="(tabs)"   options={{ headerShown: false }} />
         <Stack.Screen name="(auth)"   options={{ headerShown: false }} />
 
@@ -80,7 +82,15 @@ export default function RootLayout() {
         <Stack.Screen name="download/[id]"   options={{ headerShown: false }} />
         <Stack.Screen name="purchase/[id]"  options={{ headerShown: false }} />
         <Stack.Screen name="subscribe"       options={{ headerShown: false }} />
-        <Stack.Screen name="offline"         options={{ headerShown: false }} />
+        <Stack.Screen name="offline"    options={{ headerShown: false }} />
+        <Stack.Screen name="history"   options={{ headerShown: false }} />
+        <Stack.Screen name="purchases"             options={{ headerShown: false }} />
+        <Stack.Screen name="provider"              options={{ headerShown: false }} />
+        <Stack.Screen name="provider/upload"       options={{ headerShown: false }} />
+        <Stack.Screen name="provider/edit/[id]"    options={{ headerShown: false }} />
+        <Stack.Screen name="admin"                 options={{ headerShown: false }} />
+        <Stack.Screen name="admin/contents"        options={{ headerShown: false }} />
+        <Stack.Screen name="admin/users"           options={{ headerShown: false }} />
         <Stack.Screen name="+not-found"      options={{ headerShown: false }} />
       </Stack>
 

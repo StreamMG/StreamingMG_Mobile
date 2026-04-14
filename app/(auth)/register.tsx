@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -101,9 +100,24 @@ export default function RegisterScreen() {
         password,
       });
 
-      // Stocker token + refresh token + user
+      // // Stocker token + refresh token + user
+      // console.log("-----------")
+      // console.log(data);
       await setAuth(data.token, data.user, data.refreshToken ?? '');
-      router.replace('/(tabs)');
+      switch (data.user.role) {
+        case 'admin':
+          router.replace('/admin');
+          break;
+        case  "provider":
+          router.replace('/provider');
+          break;
+        case  "user":
+          router.replace('/(tabs)');
+          break;
+        default:
+          router.replace('/(tabs)');
+      }
+
     } catch (err: any) {
       const status = err?.response?.status;
       const code = err?.response?.data?.code;

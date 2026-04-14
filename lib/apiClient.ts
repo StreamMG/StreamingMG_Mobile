@@ -7,6 +7,10 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+  // console.log("ééééééééééééééééééééééééééééééé")
+  // console.log(process.env.STORE_KEY);
+  
+
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {

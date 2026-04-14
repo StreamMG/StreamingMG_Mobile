@@ -6,7 +6,7 @@
  *  - L'état de progression des téléchargements en cours
  *
  * Stockage persistant : expo-secure-store pour les clés AES
- * Fichiers chiffrés   : FileSystem.documentDirectory/offline/<id>.enc
+ * Fichiers chiffrés   : Constants.documentDirectory/offline/<id>.enc
  *
  * Utilisé par :
  *   app/download/[id].tsx   → setProgress, markComplete, markError
@@ -15,7 +15,8 @@
  */
 
 import { create } from 'zustand';
-import * as FileSystem from 'expo-file-system';
+import { deleteAsync } from 'expo-file-system';
+import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,8 +63,9 @@ interface DownloadState {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const OFFLINE_DIR = `${FileSystem.documentDirectory}offline/`;
-const STORE_KEY   = 'streamMG_downloads';
+const OFFLINE_DIR = `${Constants.documentDirectory}offline/`;
+const STORE_KEY   = process.env.STORE_KEY as string
+// 'streamMG_downloads';
 
 function getFilePath(contentId: string) {
   return `${OFFLINE_DIR}${contentId}.enc`;
@@ -130,7 +132,7 @@ export const useDownloadStore = create<DownloadState>((set, get) => ({
   removeDownload: async (contentId) => {
     // Supprimer le fichier chiffré
     const path = getFilePath(contentId);
-    await FileSystem.deleteAsync(path, { idempotent: true }).catch(() => {});
+    await deleteAsync(path, { idempotent: true }).catch(() => {});
 
     // Supprimer la clé AES
     await SecureStore.deleteItemAsync(`aes_${contentId}`).catch(() => {});

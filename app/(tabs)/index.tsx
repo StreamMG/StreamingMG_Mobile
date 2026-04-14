@@ -27,7 +27,7 @@
   import { colors }           from '@/lib/theme';
 
   const CARD_WIDTH = 140;
-  const CARD_GAP   = 10;
+  const CARD_GAP   = 10;  
   const SECTION_MB = 28;
 
   export default function HomeScreen() {

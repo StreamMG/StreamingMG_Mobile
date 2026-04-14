@@ -1,149 +1,153 @@
-/**
- * hooks/useDownload.ts
- *
- * Logique de téléchargement sécurisé AES-256-GCM.
- *
- * Flux (conforme API docs §Téléchargement) :
- *  1. POST /download/:id          → aesKeyHex, ivHex, signedUrl
- *  2. Stocker la clé AES dans expo-secure-store
- *  3. Télécharger le fichier via expo-file-system (downloadAsync)
- *  4. Chiffrer AES-256-GCM avec react-native-quick-crypto
- *  5. Sauvegarder en .enc dans FileSystem.documentDirectory/offline/
- *  6. Mettre à jour downloadStore
- *
- * Note : le chiffrement chunk par chunk est simplifié ici en une passe
- * complète post-téléchargement pour la lisibilité. La version production
- * utilise des chunks de 4-8 Mo avec react-native-quick-crypto.
- *
- * Utilisé par : app/download/[id].tsx
- */
-
-import { useState, useCallback, useRef } from 'react';
-import * as FileSystem from 'expo-file-system';
-import * as SecureStore from 'expo-secure-store';
-import { apiClient } from '@/lib/apiClient';
-import { useDownloadStore } from '@/stores/downloadStore';
-import { API_BASE_URL } from '@/lib/theme';
+import { apiClient } from "@/lib/apiClient";
+import { BASE_URL } from "@/lib/theme";
+import { useDownloadStore } from "@/stores/downloadStore";
+import { Directory, File, Paths } from "expo-file-system";
+import { createDownloadResumable, deleteAsync, moveAsync, DownloadResumable } from "expo-file-system/legacy";
+import * as SecureStore from "expo-secure-store";
+import { useCallback, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface UseDownloadReturn {
-  start:      (contentId: string, title: string, thumbnail: string, type: 'video' | 'audio', duration: number) => Promise<void>;
-  cancel:     () => void;
-  progress:   number;
-  status:     'idle' | 'pending' | 'downloading' | 'complete' | 'error';
-  error:      string | null;
+  start: (
+    contentId: string,
+    title: string,
+    thumbnail: string,
+    type: "video" | "audio",
+    duration: number,
+  ) => Promise<void>;
+  cancel: () => void;
+  progress: number;
+  status: "idle" | "pending" | "downloading" | "complete" | "error";
+  error: string | null;
 }
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useDownload(): UseDownloadReturn {
-  const { startDownload, setProgress, markComplete, markError, cancelDownload } =
-    useDownloadStore();
+  const {
+    startDownload,
+    setProgress,
+    markComplete,
+    markError,
+    cancelDownload,
+  } = useDownloadStore();
 
   const [progress, setLocalProgress] = useState(0);
-  const [status,   setStatus]        = useState<UseDownloadReturn['status']>('idle');
-  const [error,    setError]         = useState<string | null>(null);
+  const [status, setStatus] = useState<UseDownloadReturn["status"]>("idle");
+  const [error, setError] = useState<string | null>(null);
 
-  const downloadTaskRef = useRef<FileSystem.DownloadResumable | null>(null);
-  const currentIdRef    = useRef<string | null>(null);
+  // Référence vers l'objet de téléchargement (legacy DownloadResumable)
+  const downloadTaskRef = useRef<DownloadResumable | null>(null);
+  const currentIdRef = useRef<string | null>(null);
 
-  const start = useCallback(async (
-    contentId: string,
-    title:     string,
-    thumbnail: string,
-    type:      'video' | 'audio',
-    duration:  number,
-  ) => {
-    setStatus('pending');
-    setError(null);
-    setLocalProgress(0);
-    startDownload(contentId, title);
-    currentIdRef.current = contentId;
+  const start = useCallback(
+    async (
+      contentId: string,
+      title: string,
+      thumbnail: string,
+      type: "video" | "audio",
+      duration: number,
+    ) => {
+      setStatus("pending");
+      setError(null);
+      setLocalProgress(0);
+      startDownload(contentId, title);
+      currentIdRef.current = contentId;
 
-    try {
-      // ── 1. Obtenir clé AES + URL signée ──────────────────────────────────
-      const { data } = await apiClient.post(`/download/${contentId}`);
-      const { aesKeyHex, ivHex, signedUrl } = data;
+      try {
+        // ── 1. Obtenir clé AES + URL signée ──────────────────────────────────
+        const { data } = await apiClient.post(`/download/${contentId}`);
+        const { aesKeyHex, ivHex, signedUrl } = data;
 
-      // ── 2. Stocker la clé AES dans secure store ───────────────────────────
-      await SecureStore.setItemAsync(
-        `aes_${contentId}`,
-        JSON.stringify({ aesKeyHex, ivHex })
-      );
+        // ── 2. Stocker la clé AES dans secure store ───────────────────────────
+        await SecureStore.setItemAsync(
+          `aes_${contentId}`,
+          JSON.stringify({ aesKeyHex, ivHex }),
+        );
 
-      // ── 3. Préparer le répertoire offline ─────────────────────────────────
-      const offlineDir = `${FileSystem.documentDirectory}offline/`;
-      await FileSystem.makeDirectoryAsync(offlineDir, { intermediates: true });
+        // ── 3. Préparer le répertoire offline (API moderne)
+        const offlineDir = new Directory(Paths.document, 'offline');
+        // create() est l'API moderne pour créer un répertoire (intermédiaires supportés)
+        offlineDir.create({ intermediates: true });
 
-      const tempPath = `${offlineDir}${contentId}.tmp`;
-      const encPath  = `${offlineDir}${contentId}.enc`;
+        const tempFile = new File(offlineDir, `${contentId}.tmp`);
+        const encFile = new File(offlineDir, `${contentId}.enc`);
 
-      // ── 4. Télécharger le fichier ─────────────────────────────────────────
-      setStatus('downloading');
+        const tempPath = tempFile.uri;
+        const encPath = encFile.uri;
 
-      const fullUrl = signedUrl.startsWith('http')
-        ? signedUrl
-        : `${API_BASE_URL}${signedUrl}`;
+        // ── 4. Télécharger le fichier ─────────────────────────────────────────
+        setStatus("downloading");
 
-      const downloadTask = FileSystem.createDownloadResumable(
-        fullUrl,
-        tempPath,
-        {},
-        (downloadProgress) => {
-          const pct = Math.round(
-            (downloadProgress.totalBytesWritten /
-              downloadProgress.totalBytesExpectedToWrite) * 100
-          );
-          setLocalProgress(pct);
-          setProgress(contentId, pct);
+        const fullUrl = signedUrl.startsWith("http")
+          ? signedUrl
+          : `${BASE_URL}${signedUrl}`;
+
+          const downloadTask = createDownloadResumable(
+          fullUrl,
+          tempPath,
+          {},
+          (downloadProgress) => {
+            const totalExpected = downloadProgress.totalBytesExpectedToWrite;
+            const written = downloadProgress.totalBytesWritten;
+
+            if (totalExpected > 0) {
+              const pct = Math.round((written / totalExpected) * 100);
+              setLocalProgress(pct);
+              setProgress(contentId, pct);
+            }
+          },
+        );
+
+        downloadTaskRef.current = downloadTask;
+        const result: any =
+          await downloadTask.downloadAsync();
+
+        if (!result || currentIdRef.current !== contentId) {
+          // Annulé ou ID corrompu
+          await deleteAsync(tempPath, { idempotent: true });
+          return;
         }
-      );
 
-      downloadTaskRef.current = downloadTask;
-      const result = await downloadTask.downloadAsync();
+        // ── 5. Chiffrement AES-256-GCM ────────────────────────────────────────
+        // Note: Simulation du chiffrement par un renommage
+        await moveAsync({ from: tempPath, to: encPath });
 
-      if (!result || currentIdRef.current !== contentId) {
-        // Annulé
-        await FileSystem.deleteAsync(tempPath, { idempotent: true });
-        return;
+        // ── 6. Marquer comme complété ─────────────────────────────────────────
+        markComplete({
+          contentId,
+          title,
+          thumbnail,
+          type,
+          duration,
+          filePath: encPath,
+          downloadedAt: new Date().toISOString(),
+        });
+
+        setStatus("complete");
+        setLocalProgress(100);
+      } catch (e: any) {
+        console.error("[Download Error]", e);
+        const msg =
+          e?.response?.status === 409
+            ? "Ce contenu est déjà téléchargé."
+            : e?.response?.status === 403
+              ? "Vous n'avez pas les droits pour télécharger ce contenu."
+              : "Erreur lors du téléchargement. Réessayez.";
+
+        setError(msg);
+        setStatus("error");
+        markError(contentId, msg);
       }
-
-      // ── 5. Chiffrement AES-256-GCM ────────────────────────────────────────
-      // En production : react-native-quick-crypto chunk par chunk
-      // Ici : on renomme simplement le fichier (mock — pas de vrai chiffrement
-      // sans react-native-quick-crypto installé)
-      await FileSystem.moveAsync({ from: tempPath, to: encPath });
-
-      // ── 6. Marquer comme complété ─────────────────────────────────────────
-      markComplete({
-        contentId,
-        title,
-        thumbnail,
-        type,
-        duration,
-        filePath:     encPath,
-        downloadedAt: new Date().toISOString(),
-      });
-
-      setStatus('complete');
-      setLocalProgress(100);
-
-    } catch (e: any) {
-      const msg = e?.response?.status === 409
-        ? 'Ce contenu est déjà téléchargé.'
-        : e?.response?.status === 403
-        ? "Vous n'avez pas les droits pour télécharger ce contenu."
-        : 'Erreur lors du téléchargement. Réessayez.';
-
-      setError(msg);
-      setStatus('error');
-      markError(contentId, msg);
-    }
-  }, [startDownload, setProgress, markComplete, markError]);
+    },
+    [startDownload, setProgress, markComplete, markError],
+  );
 
   const cancel = useCallback(() => {
     if (downloadTaskRef.current) {
+      // On utilise pauseAsync car cancelAsync n'est pas toujours dispo
+      // selon les versions, ou on laisse simplement tomber la ref.
       downloadTaskRef.current.pauseAsync().catch(() => {});
       downloadTaskRef.current = null;
     }
@@ -151,7 +155,7 @@ export function useDownload(): UseDownloadReturn {
       cancelDownload(currentIdRef.current);
       currentIdRef.current = null;
     }
-    setStatus('idle');
+    setStatus("idle");
     setLocalProgress(0);
   }, [cancelDownload]);
 
