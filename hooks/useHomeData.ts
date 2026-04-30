@@ -50,7 +50,7 @@ export function useHomeData(): UseHomeDataReturn {
   const fetchAll = useCallback(async () => {
     setLoading(true);
     setError(null);
-
+// console.log("fetching home data - - - - - - - - --  -- - - - -")
     try {
       const [featuredRes, trendingRes, freeRes, newRes] = await Promise.all([
         apiClient.get('/contents/featured'),
@@ -60,6 +60,10 @@ export function useHomeData(): UseHomeDataReturn {
       ]);
 
       // Tutoriels en cours — seulement si connecté
+      // console.log("data featyred- - - - - - - - - --  -- - - - - ieeeeee")
+      // console.log(featuredRes.data.featured)""
+      // console.log("- - - - - - - - - --  -- - - - -")
+
       let tutorialsInProgress: (ContentItem & { progress: number })[] = [];
 
       if (isAuthenticated) {
@@ -98,7 +102,8 @@ export function useHomeData(): UseHomeDataReturn {
         newReleases:         newRes.data.contents       ?? [],
         tutorialsInProgress,
       });
-    } catch {
+    } catch (err) {
+      console.error('Error fetching home data:', err);
       setError('Impossible de charger le contenu. Vérifiez votre connexion.');
     } finally {
       setLoading(false);

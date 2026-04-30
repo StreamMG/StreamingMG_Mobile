@@ -87,22 +87,33 @@ export default function AudioPlayerScreen() {
     setError(null);
     try {
       console.log("AVANT FECTH url audio")
-      const { data } = await apiClient.get(`/audio/${id}/url`);
+      
+      // 1. Obtenir l'URL audio (format actuel du serveur: { url: "/uploads/audio/test-audio.mp3" })
+      const { data: urlData } = await apiClient.get(`/audio/${id}/url`);
+      
+      // 2. Obtenir les métadonnées complètes via /contents/:id
+      const { data: contentData } = await apiClient.get(`/contents/${id}`);
 
-      const coverArt = data.metadata.coverArt?.startsWith('http')
-        ? data.metadata.coverArt
-        : `${BASE_URL}${data.metadata.coverArt}`;
+      // Construire l'URL complète
+      const audioUrl = urlData.url.startsWith('http')
+        ? urlData.url
+        : `${BASE_URL}${urlData.url}`;
 
-      const audioUrl = data.audioUrl;
+      const coverArt = contentData.content.thumbnail?.startsWith('http')
+        ? contentData.content.thumbnail
+        : `${BASE_URL}${contentData.content.thumbnail}`;
+
+      console.log("URL audio:", audioUrl);
+      console.log("Métadonnées:", contentData.content);
 
       // Alimenter le store → MiniPlayer l'utilise
       setTrack({
         contentId: id,
-        title:     data.metadata.title,
-        artist:    data.metadata.artist ?? null,
+        title:     contentData.content.title,
+        artist:    contentData.content.artist ?? null,
         coverArt,
         audioUrl,
-        duration:  data.metadata.duration,
+        duration:  contentData.content.duration ?? 0, // La durée sera mise à jour par expo-av
       });
       setLoading(true);
 
@@ -116,13 +127,13 @@ export default function AudioPlayerScreen() {
       console.log("AVANT LE CHARGEMENT DU SON")
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUrl },
-        { shouldPlay: true },
+        { shouldPlay: false }, // Ne pas démarrer automatiquement pour éviter le double son
         onPlaybackUpdate
       );
       console.log("APRES")
       soundRef.current = sound;
       setLoading(false);
-      play();
+      play(); // Démarrer manuellement via le store
       console.log("APRES LANCEMENT")
       // Incrémenter vues
       apiClient.post(`/contents/${id}/view`).catch(() => {});
@@ -139,6 +150,19 @@ export default function AudioPlayerScreen() {
       setLoadingLocal(false);
     }
   };
+
+  // ── Historique ──────────────────────────────────────────────────────────────
+
+  const saveHistory = useCallback(async (completed = false) => {
+    if (!id || position === 0) return;
+    try {
+      await apiClient.post(`/history/${id}`, {
+        progress:  Math.floor(position),
+        duration:  Math.floor(duration),
+        completed,
+      });
+    } catch { /* silencieux */ }
+  }, [id, position, duration]);
 
   // ── Playback update ─────────────────────────────────────────────────────────
 
@@ -157,7 +181,7 @@ export default function AudioPlayerScreen() {
         saveHistory(true);
       }
     },
-    [isScrubbing]
+    [isScrubbing, pause, saveHistory]
   );
 
   // ── Sync play/pause store → Sound ──────────────────────────────────────────
@@ -170,19 +194,6 @@ export default function AudioPlayerScreen() {
       soundRef.current.pauseAsync().catch(() => {});
     }
   }, [isPlaying]);
-
-  // ── Historique ──────────────────────────────────────────────────────────────
-
-  const saveHistory = useCallback(async (completed = false) => {
-    if (!id || position === 0) return;
-    try {
-      await apiClient.post(`/history/${id}`, {
-        progress:  Math.floor(position),
-        duration:  Math.floor(duration),
-        completed,
-      });
-    } catch { /* silencieux */ }
-  }, [id, position, duration]);
 
   useEffect(() => {
     historyTimer.current = setInterval(() => saveHistory(), HISTORY_INTERVAL);

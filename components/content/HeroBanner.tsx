@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { Play, Info } from 'lucide-react-native';
 import { Badge, AccessType } from '@/components/ui/Badge';
-import { colors, radius, spacing } from '@/lib/theme';
+import { colors, radius, spacing, BASE_URL } from '@/lib/theme';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,7 +54,7 @@ const HERO_H   = Math.round(SCREEN_W * 0.68); // ~68% de la largeur → hauteur 
 
 function buildUri(thumbnail: string, base?: string): string {
   if (thumbnail.startsWith('http')) return thumbnail;
-  const root = base ?? (__DEV__ ? 'http://localhost:3001' : 'https://api.streamMG.railway.app');
+  const root = base ?? BASE_URL;
   return `${root}${thumbnail}`;
 }
 

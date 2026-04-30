@@ -29,6 +29,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { apiClient }      from '@/lib/apiClient';
 import { BASE_URL, colors } from '@/lib/theme';
+// import { isLoaded } from 'expo-font';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -62,6 +63,9 @@ export default function VideoPlayerScreen() {
   const [paused,   setPaused]   = useState(false);
   const [showCtrl, setShowCtrl] = useState(true);
   const [title,    setTitle]    = useState('');
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isReady,  setIsReady]  = useState(false);
 
   // ── Orientation ──────────────────────────────────────────────────────────────
 
@@ -144,6 +148,10 @@ export default function VideoPlayerScreen() {
 
   const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
     if (!status.isLoaded) return;
+    
+    // Marquer la vidéo comme prête
+    setIsReady(true);
+    
     positionRef.current = (status.positionMillis ?? 0) / 1000;
     durationRef.current = (status.durationMillis ?? 0) / 1000;
 
@@ -153,10 +161,32 @@ export default function VideoPlayerScreen() {
     }
 
     // Token expiré (10 min) → renouveler automatiquement
-    if ((status as { error?: string}).error) {
+    if ((status as { error?: string }).error) {
       loadToken();
     }
   }, [saveHistory]);
+
+  // ── Position update interval (fix: update every second) ─────────────────────
+
+  useEffect(() => {
+    if (!isReady || paused) return;
+
+    const interval = setInterval(async () => {
+      if (videoRef.current) {
+        const status = await videoRef.current.getStatusAsync();
+        if (status.isLoaded) {
+          const pos = (status.positionMillis ?? 0) / 1000;
+          const dur = (status.durationMillis ?? 0) / 1000;
+          positionRef.current = pos;
+          durationRef.current = dur;
+          setPosition(pos);
+          setDuration(dur);
+        }
+      }
+    }, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, [isReady, paused]);
 
   // ── Contrôles ────────────────────────────────────────────────────────────────
 
@@ -253,20 +283,20 @@ export default function VideoPlayerScreen() {
 
           {/* Footer — barre de progression */}
           <SafeAreaView style={s.footer} edges={['bottom', 'left', 'right']}>
-            <Text style={s.timeText}>{formatTime(positionRef.current)}</Text>
+            <Text style={s.timeText}>{formatTime(position)}</Text>
             <View style={s.progressTrack}>
               <View
                 style={[
                   s.progressFill,
                   {
-                    width: durationRef.current > 0
-                      ? `${(positionRef.current / durationRef.current) * 100}%`
+                    width: duration > 0
+                      ? `${(position / duration) * 100}%`
                       : '0%',
                   },
                 ]}
               />
             </View>
-            <Text style={s.timeText}>{formatTime(durationRef.current)}</Text>
+            <Text style={s.timeText}>{formatTime(duration)}</Text>
           </SafeAreaView>
         </View>
       )}

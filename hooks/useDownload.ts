@@ -60,6 +60,10 @@ export function useDownload(): UseDownloadReturn {
         const { data } = await apiClient.post(`/download/${contentId}`);
         const { aesKeyHex, ivHex, signedUrl } = data;
 
+        console.log("[Download] AES Key (hex):", aesKeyHex);
+        console.log("[Download] IV (hex):", ivHex);
+        console.log("[Download] Signed URL:", signedUrl);
+
         // ── 2. Stocker la clé AES dans secure store ───────────────────────────
         await SecureStore.setItemAsync(
           `aes_${contentId}`,
@@ -68,8 +72,11 @@ export function useDownload(): UseDownloadReturn {
 
         // ── 3. Préparer le répertoire offline (API moderne)
         const offlineDir = new Directory(Paths.document, 'offline');
-        // create() est l'API moderne pour créer un répertoire (intermédiaires supportés)
-        offlineDir.create({ intermediates: true });
+        // Vérifier si le répertoire existe avant de le créer
+        // L'API moderne Directory.create() rejette si le répertoire existe déjà
+        if (!offlineDir.exists) {
+          await offlineDir.create({ intermediates: true });
+        }
 
         const tempFile = new File(offlineDir, `${contentId}.tmp`);
         const encFile = new File(offlineDir, `${contentId}.enc`);
@@ -130,11 +137,13 @@ export function useDownload(): UseDownloadReturn {
       } catch (e: any) {
         console.error("[Download Error]", e);
         const msg =
-          e?.response?.status === 409
-            ? "Ce contenu est déjà téléchargé."
-            : e?.response?.status === 403
-              ? "Vous n'avez pas les droits pour télécharger ce contenu."
-              : "Erreur lors du téléchargement. Réessayez.";
+          e?.response?.status === 404
+            ? "Fichier source introuvable. Le transcodage est peut-être en cours."
+            : e?.response?.status === 409
+              ? "Ce contenu est déjà téléchargé."
+              : e?.response?.status === 403
+                ? "Vous n'avez pas les droits pour télécharger ce contenu."
+                : "Erreur lors du téléchargement. Réessayez.";
 
         setError(msg);
         setStatus("error");

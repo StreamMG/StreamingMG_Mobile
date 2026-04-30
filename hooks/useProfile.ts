@@ -46,6 +46,7 @@ interface UseProfileReturn {
 
 export function useProfile(): UseProfileReturn {
   const user             = useAuthStore((s) => s.user);
+  const isAuthenticated  = useAuthStore((s) => s.isAuthenticated);
   const setAuth          = useAuthStore((s) => s.setAuth);
   const loadPurchases    = usePurchaseStore((s) => s.loadPurchases);
   const loadSubscription = usePurchaseStore((s) => s.loadSubscription);
@@ -57,18 +58,36 @@ export function useProfile(): UseProfileReturn {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const fetchProfile = useCallback(async () => {
+    // Ne pas charger le profil si l'utilisateur n'est pas connecté
+    if (!isAuthenticated) {
+      setLoading(false);
+      setError(null);
+      setProfile(null);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const { data } = await apiClient.get('/user/profile');
-      setProfile(data);
+      // S'assurer que stats existe avec des valeurs par défaut
+      const profileWithStats = {
+        ...data,
+        stats: data.stats || {
+          totalWatched: 0,
+          totalPurchases: 0,
+          tutorialsInProgress: 0,
+        },
+      };
+      setProfile(profileWithStats);
       await Promise.all([loadPurchases(apiClient), loadSubscription(apiClient)]);
-    } catch {
+    } catch (e: any) {
+      console.error('Erreur chargement profil:', e?.response?.data || e?.message);
       setError('Impossible de charger le profil.');
     } finally {
       setLoading(false);
     }
-  }, [loadPurchases, loadSubscription]);
+  }, [isAuthenticated, loadPurchases, loadSubscription]);
 
   useEffect(() => { fetchProfile(); }, [fetchProfile]);
 

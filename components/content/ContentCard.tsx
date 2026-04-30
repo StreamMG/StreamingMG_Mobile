@@ -77,11 +77,14 @@ const CARD_DIMS = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatDuration(s: number): string {
+function formatDuration(s: number | null): string {
+  if (s === null || s === 0) return '--';
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
   if (h > 0) return `${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`;
-  return `${m}min`;
+  if (m > 0) return `${m}min`;
+  return `${sec}s`;
 }
 
 function buildUri(thumbnail: string, base?: string): string {
@@ -104,6 +107,7 @@ export function ContentCard({
   const isAudio   = content.type === 'audio';
   const hasRating = content.rating != null;
   const hasProgr  = progress != null && progress > 0;
+  console.log(buildUri(content.thumbnail, apiBaseUrl))
 
   return (
     <TouchableOpacity

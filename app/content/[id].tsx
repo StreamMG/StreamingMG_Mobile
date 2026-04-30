@@ -359,10 +359,12 @@ function MetaChip({ icon, label }: { icon: string; label: string }) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDuration(sec: number): string {
-  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+function formatDuration(sec: number | null): string {
+  if (sec === null || sec === 0) return '--';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
   if (h > 0) return `${h}h${m > 0 ? m + 'min' : ''}`;
-  return `${m}min`;
+  if (m > 0) return `${m}min`;
+  return `${s}s`;
 }
 function formatViews(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}k vues` : `${n} vues`;

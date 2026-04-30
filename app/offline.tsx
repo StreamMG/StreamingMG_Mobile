@@ -123,11 +123,14 @@ export default function OfflineScreen() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function formatDuration(sec: number): string {
+function formatDuration(sec: number | null): string {
+  if (sec === null || sec === 0) return '--';
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
   if (h > 0) return `${h}h${m > 0 ? m + 'min' : ''}`;
-  return `${m}min`;
+  if (m > 0) return `${m}min`;
+  return `${s}s`;
 }
 
 function formatDate(iso: string): string {
