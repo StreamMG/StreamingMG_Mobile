@@ -14,7 +14,7 @@ import {
   View, Text, Image, TouchableOpacity,
   PanResponder, StyleSheet, Dimensions,
 } from 'react-native';
-import { router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '@/stores/playerStore';
 import { colors } from '@/lib/theme';
@@ -27,6 +27,15 @@ export function MiniPlayer() {
     track, isPlaying, position, duration,
     visible, play, pause, setPosition, dismiss,
   } = usePlayerStore();
+
+  const segments = useSegments();
+  
+  // Détecter si on est dans un lecteur audio/vidéo
+  const isPlayerScreen = segments.some(seg => seg?.startsWith('player'));
+  
+  // Si on est dans un lecteur, le MiniPlayer est en bas (bottom: 0)
+  // Sinon, il est surélevé pour laisser place aux onglets de navigation (bottom: 56)
+  const bottomOffset = isPlayerScreen ? 0 : 56;
 
   // Caché si pas de piste ou dismissed
   if (!track || !visible) return null;
@@ -47,7 +56,7 @@ export function MiniPlayer() {
   });
 
   return (
-    <View style={s.container}>
+    <View style={[s.container, { bottom: bottomOffset }]}>
       {/* Barre de progression scrubable */}
       <View style={s.progressTrack} {...panResponder.panHandlers}>
         <View style={[s.progressFill, { width: barWidth }]} />

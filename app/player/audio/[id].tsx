@@ -359,7 +359,7 @@ function formatTime(sec: number): string {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root:    { flex: 1, backgroundColor: colors.bgBase },
+  root:    { flex: 1, backgroundColor: colors.bgBase, paddingBottom: 75 }, // Espace pour le MiniPlayer
   centered: {
     flex: 1, backgroundColor: colors.bgBase,
     alignItems: 'center', justifyContent: 'center', gap: 16,

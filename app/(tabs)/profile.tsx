@@ -31,10 +31,26 @@ import { validateUsername, validatePassword } from '@/lib/validation';
 import { colors }           from '@/lib/theme';
 
 export default function ProfileScreen() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const { profile, loading, error, saving, saveError, updateUsername, updatePassword, refresh } = useProfile();
   const logout       = useAuthStore((s) => s.logout);
   const purchases    = usePurchaseStore((s) => s.purchases);
   const subscription = usePurchaseStore((s) => s.subscription);
+
+  // Rediriger si non connecté
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={s.centered}>
+        <View style={s.loginPrompt}>
+          <Ionicons name="person-outline" size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
+          <Text style={s.loginPromptTitle}>Connectez-vous pour accéder à votre profil</Text>
+          <TouchableOpacity style={s.loginBtn} onPress={() => router.push('/(auth)/login')}>
+            <Text style={s.loginBtnText}>Se connecter</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   // Édition username
   const [editingUsername, setEditingUsername] = useState(false);
@@ -319,6 +335,10 @@ function PasswordInput({ label, value, onChangeText, show, onToggle }: {
 const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: colors.bgBase },
   centered:{ flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  loginPrompt: { alignItems: 'center', paddingHorizontal: 32, gap: 16 },
+  loginPromptTitle: { fontSize: 16, color: colors.textPrimary, fontFamily: 'Sora_600SemiBold', textAlign: 'center', marginBottom: 8 },
+  loginBtn: { paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' },
+  loginBtnText: { color: '#fff', fontFamily: 'Sora_600SemiBold', fontSize: 14 },
 
   header: { alignItems: 'center', paddingVertical: 28, gap: 6 },
   avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
