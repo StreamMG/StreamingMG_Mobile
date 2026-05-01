@@ -18,6 +18,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/lib/apiClient';
+import { formatError } from '@/lib/errorFormatter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,8 +77,8 @@ export function useProviderList(): UseProviderListReturn {
       const { data } = await apiClient.get('/provider/contents');
       setContents(data.contents ?? []);
       setTotal(data.total ?? 0);
-    } catch {
-      setError('Impossible de charger vos contenus.');
+    } catch (e: any) {
+      setError(formatError(e, 'Impossible de charger vos contenus.'));
     } finally {
       setLoading(false);
     }
@@ -165,14 +166,7 @@ export function useProviderUpload(): UseProviderUploadReturn {
     } catch (e: any) {
       console.log("entrer dans cacth")
       console.log(e.message);
-      const code = e?.response?.data?.code;
-      setError(
-        code === 'THUMBNAIL_REQUIRED' ? 'La vignette est obligatoire.' :
-        code === 'INVALID_MIME_TYPE'  ? 'Type de fichier non autorisé.' :
-        code === 'FILE_TOO_LARGE'     ? 'Fichier trop volumineux (max 5 Mo pour la vignette).' :
-        code === 'PRICE_REQUIRED'     ? 'Le prix est requis pour un contenu payant.' :
-        'Erreur lors de l\'envoibebebbbebeb.'
-      );
+      setError(formatError(e, 'Erreur lors de l\'envoi.'));
       return false;
     } finally {
       setUploading(false);
@@ -205,7 +199,7 @@ export function useProviderEdit(id: string): UseProviderEditReturn {
     if (!id) return;
     apiClient.get(`/contents/${id}`)
       .then(({ data }) => setContent(data))
-      .catch(() => setError('Contenu introuvable.'))
+      .catch((e: any) => setError(formatError(e, 'Contenu introuvable.')))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -220,7 +214,7 @@ export function useProviderEdit(id: string): UseProviderEditReturn {
       setContent((c) => c ? { ...c, title: res.title } : c);
       return true;
     } catch (e: any) {
-      setSaveError(e?.response?.data?.code === 'FORBIDDEN' ? 'Accès refusé.' : 'Erreur lors de la sauvegarde.');
+      setSaveError(formatError(e, 'Erreur lors de la sauvegarde.'));
       return false;
     } finally { setSaving(false); }
   }, []);
@@ -236,7 +230,7 @@ export function useProviderEdit(id: string): UseProviderEditReturn {
       setContent((c) => c ? { ...c, accessType: res.accessType, price: res.price } : c);
       return true;
     } catch (e: any) {
-      setSaveError('Erreur lors de la sauvegarde.');
+      setSaveError(formatError(e, 'Erreur lors de la sauvegarde.'));
       return false;
     } finally { setSaving(false); }
   }, []);

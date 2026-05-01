@@ -9,6 +9,7 @@ import {
   Platform,
   ActivityIndicator,
   Pressable,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -155,12 +156,19 @@ export default function RegisterScreen() {
         >
           {/* ── Titre ── */}
           <View className="mb-8 mt-2">
-            <Text
-              className="text-[28px] text-[#eef0f6] mb-2"
-              style={{ fontFamily: 'Sora_800ExtraBold', letterSpacing: -0.8 }}
-            >
-              Créer un compte
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <Image 
+                source={require('../assets/images/logo.png')} 
+                style={{ width: 40, height: 40 }}
+                resizeMode="contain"
+              />
+              <Text
+                className="text-[28px] text-[#eef0f6]"
+                style={{ fontFamily: 'Sora_800ExtraBold', letterSpacing: -0.8 }}
+              >
+                StreamMG
+              </Text>
+            </View>
             <Text
               className="text-[14px] text-[#8d96a8]"
               style={{ fontFamily: 'DMSans_400Regular' }}

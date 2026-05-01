@@ -26,10 +26,12 @@ import { Audio } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { apiClient }      from '@/lib/apiClient';
 import { usePlayerStore } from '@/stores/playerStore';
-import { colors,BASE_URL }         from '@/lib/theme';
-// import { BASE_URL }       from '@/lib/theme';
+import { apiClient } from '@/lib/apiClient';
+import { BASE_URL } from '@/lib/theme';
+import { colors } from '@/lib/theme';
+import { formatError } from '@/lib/errorFormatter';
+
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
 const { width: W }       = Dimensions.get('window');
@@ -144,7 +146,7 @@ export default function AudioPlayerScreen() {
         router.back();
       } else {
         console.log("Erreur de chargement audio:", e.message);
-        setError('Impossible de charger l\'audio.');
+        setError(formatError(e, 'Impossible de charger l\'audio.'));
       }
     } finally {
       setLoadingLocal(false);

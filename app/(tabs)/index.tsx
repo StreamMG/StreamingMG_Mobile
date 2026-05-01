@@ -11,7 +11,7 @@
   import {
     View, Text, FlatList, ScrollView,
     RefreshControl, ActivityIndicator,
-    TouchableOpacity, StyleSheet,
+    TouchableOpacity, StyleSheet, Image,
   } from 'react-native';
   import { SafeAreaView } from 'react-native-safe-area-context';
   import { router } from 'expo-router';
@@ -92,9 +92,16 @@
         >
           {/* Logo */}
           <View style={s.header}>
-            <Text style={s.logo}>
-              Stream<Text style={s.logoAccent}>MG</Text>
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Image 
+                source={require('../../assets/images/logo.png')} 
+                style={{ width: 38, height: 38 }}
+                resizeMode="contain"
+              />
+              <Text style={s.logo}>
+                Stream<Text style={s.logoAccent}>MG</Text>
+              </Text>
+            </View>
           </View>
 
           {/* HeroBanner */}

@@ -17,7 +17,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, ScrollView,
-  ActivityIndicator, StyleSheet, TextInput,
+  ActivityIndicator, StyleSheet, TextInput, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -27,6 +27,7 @@ import { usePurchaseStore } from '@/stores/purchaseStore';
 import { useAuthStore }     from '@/stores/authStore';
 import { apiClient }        from '@/lib/apiClient';
 import { colors }           from '@/lib/theme';
+import { formatError }      from '@/lib/errorFormatter';
 
 // ─── Plans ────────────────────────────────────────────────────────────────────
 
@@ -105,12 +106,7 @@ export default function SubscribeScreen() {
 
       setStep('success');
     } catch (e: any) {
-      const code = e?.response?.data?.code;
-      if (code === 'ALREADY_SUBSCRIBED') {
-        setError('Vous avez déjà un abonnement Premium actif.');
-      } else {
-        setError('Paiement échoué. Vérifiez vos informations.');
-      }
+      setError(formatError(e, 'Paiement échoué. Vérifiez vos informations.'));
     } finally {
       setLoading(false);
     }
@@ -125,7 +121,14 @@ export default function SubscribeScreen() {
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>StreamMG Premium</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Image 
+            source={require('../assets/images/logo.png')} 
+            style={{ width: 28, height: 28 }}
+            resizeMode="contain"
+          />
+          <Text style={s.headerTitle}>Premium</Text>
+        </View>
         <View style={{ width: 40 }} />
       </View>
 

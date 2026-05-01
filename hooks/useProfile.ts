@@ -17,6 +17,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { apiClient }        from '@/lib/apiClient';
 import { useAuthStore }     from '@/stores/authStore';
 import { usePurchaseStore } from '@/stores/purchaseStore';
+import { formatError }      from '@/lib/errorFormatter';
 
 export interface UserProfile {
   _id:           string;
@@ -83,7 +84,7 @@ export function useProfile(): UseProfileReturn {
       await Promise.all([loadPurchases(apiClient), loadSubscription(apiClient)]);
     } catch (e: any) {
       console.error('Erreur chargement profil:', e?.response?.data || e?.message);
-      setError('Impossible de charger le profil.');
+      setError(formatError(e, 'Impossible de charger le profil.'));
     } finally {
       setLoading(false);
     }
@@ -104,12 +105,7 @@ export function useProfile(): UseProfileReturn {
       }
       return true;
     } catch (e: any) {
-      const code = e?.response?.data?.code;
-      setSaveError(
-        code === 'USERNAME_DUPLICATE' ? 'Ce nom est déjà pris.' :
-        code === 'INVALID_USERNAME'   ? 'Nom invalide (3–30 caractères).' :
-        'Une erreur est survenue.'
-      );
+      setSaveError(formatError(e, 'Une erreur est survenue.'));
       return false;
     } finally { setSaving(false); }
   }, [user, setAuth]);
@@ -123,12 +119,7 @@ export function useProfile(): UseProfileReturn {
       await apiClient.patch('/user/password', { currentPassword, newPassword });
       return true;
     } catch (e: any) {
-      const code = e?.response?.data?.code;
-      setSaveError(
-        code === 'WRONG_PASSWORD' ? 'Mot de passe actuel incorrect.' :
-        code === 'WEAK_PASSWORD'  ? 'Nouveau mot de passe trop faible.' :
-        'Une erreur est survenue.'
-      );
+      setSaveError(formatError(e, 'Une erreur est survenue.'));
       return false;
     } finally { setSaving(false); }
   }, []);

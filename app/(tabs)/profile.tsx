@@ -37,6 +37,20 @@ export default function ProfileScreen() {
   const purchases    = usePurchaseStore((s) => s.purchases);
   const subscription = usePurchaseStore((s) => s.subscription);
 
+  // Édition username
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [newUsername,     setNewUsername]     = useState('');
+  const [usernameError,   setUsernameError]   = useState<string | null>(null);
+
+  // Édition mot de passe
+  const [editingPassword,   setEditingPassword]   = useState(false);
+  const [currentPassword,   setCurrentPassword]   = useState('');
+  const [newPassword,       setNewPassword]       = useState('');
+  const [confirmPassword,   setConfirmPassword]   = useState('');
+  const [passwordError,     setPasswordError]     = useState<string | null>(null);
+  const [showCurrentPwd,    setShowCurrentPwd]    = useState(false);
+  const [showNewPwd,        setShowNewPwd]        = useState(false);
+
   // Rediriger si non connecté
   if (!isAuthenticated) {
     return (
@@ -51,20 +65,6 @@ export default function ProfileScreen() {
       </SafeAreaView>
     );
   }
-
-  // Édition username
-  const [editingUsername, setEditingUsername] = useState(false);
-  const [newUsername,     setNewUsername]     = useState('');
-  const [usernameError,   setUsernameError]   = useState<string | null>(null);
-
-  // Édition mot de passe
-  const [editingPassword,   setEditingPassword]   = useState(false);
-  const [currentPassword,   setCurrentPassword]   = useState('');
-  const [newPassword,       setNewPassword]       = useState('');
-  const [confirmPassword,   setConfirmPassword]   = useState('');
-  const [passwordError,     setPasswordError]     = useState<string | null>(null);
-  const [showCurrentPwd,    setShowCurrentPwd]    = useState(false);
-  const [showNewPwd,        setShowNewPwd]        = useState(false);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 

@@ -27,9 +27,10 @@ import * as Device from 'expo-device';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { apiClient }      from '@/lib/apiClient';
-import { BASE_URL, colors } from '@/lib/theme';
-// import { isLoaded } from 'expo-font';
+import { apiClient } from '@/lib/apiClient';
+import { BASE_URL } from '@/lib/theme';
+import { colors } from '@/lib/theme';
+import { formatError } from '@/lib/errorFormatter';
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -116,7 +117,7 @@ export default function VideoPlayerScreen() {
       if (e?.response?.status === 403) {
         router.back(); // AccessGateModal géré par l'intercepteur
       } else {
-        setError('Impossible de charger la vidéo.');
+        setError(formatError(e, 'Impossible de charger la vidéo.'));
       }
     } finally {
       setLoading(false);

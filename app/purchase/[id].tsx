@@ -23,6 +23,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePurchaseStore } from '@/stores/purchaseStore';
 import { apiClient }        from '@/lib/apiClient';
 import {BASE_URL, colors } from '@/lib/theme';
+import { formatError }      from '@/lib/errorFormatter';
 
 export default function PurchaseScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -43,7 +44,7 @@ export default function PurchaseScreen() {
     if (!id) return;
     apiClient.get(`/contents/${id}`)
       .then(({ data }) => setContent(data))
-      .catch(() => setError('Contenu introuvable.'))
+      .catch((e: any) => setError(formatError(e, 'Contenu introuvable.')))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -70,12 +71,7 @@ export default function PurchaseScreen() {
 
       setSuccess(true);
     } catch (e: any) {
-      const code = e?.response?.data?.code;
-      if (code === 'ALREADY_PURCHASED') {
-        setError('Vous avez déjà acheté ce contenu.');
-      } else {
-        setError('Paiement échoué. Réessayez.');
-      }
+      setError(formatError(e, 'Paiement échoué. Réessayez.'));
     } finally {
       setPaying(false);
     }

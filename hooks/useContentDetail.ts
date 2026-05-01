@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/lib/apiClient';
 import { useAuthStore } from '@/stores/authStore';
+import { formatError } from '@/lib/errorFormatter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -145,11 +146,7 @@ const fetchDetail = useCallback(async () => {
       apiClient.post(`/contents/${id}/view`).catch(() => {});
 
     } catch (e: any) {
-      if (e?.response?.status === 404) {
-        setError('Ce contenu est introuvable.');
-      } else {
-        setError('Impossible de charger le contenu.');
-      }
+      setError(formatError(e, 'Impossible de charger le contenu.'));
     } finally {
       setLoading(false);
     }
