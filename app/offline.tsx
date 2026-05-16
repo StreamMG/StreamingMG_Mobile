@@ -1,10 +1,12 @@
 /**
  * app/offline.tsx — Bibliothèque hors-ligne
  *
- * Liste tous les contenus téléchargés avec option de suppression.
+ * Liste tous les contenus téléchargés avec :
+ *  - Lecture directe hors-ligne via /player/offline/:id (plus /content/:id)
+ *  - Suppression avec confirmation + nettoyage du fichier .enc et de la clé AES
+ *  - Indicateur visuel "Chiffré" sur chaque item
  *
  * Route : /offline
- * Importe : downloadStore, colors
  */
 
 import React from 'react';
@@ -25,7 +27,7 @@ export default function OfflineScreen() {
   const handleDelete = (contentId: string, title: string) => {
     Alert.alert(
       'Supprimer le téléchargement',
-      `Supprimer "${title}" de vos téléchargements ?`,
+      `Supprimer "${title}" de vos téléchargements ?\n\nLe fichier chiffré sera définitivement supprimé.`,
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -37,8 +39,17 @@ export default function OfflineScreen() {
     );
   };
 
+  /**
+   * Ouvre le lecteur hors-ligne adapté au type de contenu.
+   * /player/offline/:id gère vidéo et audio chiffrés (déchiffrement en mémoire).
+   */
+  const handlePlay = (contentId: string) => {
+    router.push(`/player/offline/${contentId}`);
+  };
+
   return (
     <SafeAreaView style={s.root} edges={['top']}>
+
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
@@ -50,12 +61,20 @@ export default function OfflineScreen() {
 
       {downloads.length === 0 ? (
         <View style={s.empty}>
-          <Ionicons name="download-outline" size={56} color={colors.textMuted} style={{ opacity: 0.3 }} />
+          <Ionicons
+            name="download-outline"
+            size={56}
+            color={colors.textMuted}
+            style={{ opacity: 0.3 }}
+          />
           <Text style={s.emptyTitle}>Aucun téléchargement</Text>
           <Text style={s.emptySubtitle}>
             Les contenus téléchargés apparaîtront ici pour une lecture hors-ligne.
           </Text>
-          <TouchableOpacity style={s.browseBtn} onPress={() => router.replace('/(tabs)')}>
+          <TouchableOpacity
+            style={s.browseBtn}
+            onPress={() => router.replace('/(tabs)')}
+          >
             <Text style={s.browseBtnText}>Parcourir le catalogue</Text>
           </TouchableOpacity>
         </View>
@@ -73,27 +92,36 @@ export default function OfflineScreen() {
             return (
               <TouchableOpacity
                 style={s.item}
-                onPress={() => router.push(`/content/${item.contentId}`)}
+                onPress={() => handlePlay(item.contentId)}
                 activeOpacity={0.78}
               >
-                {/* Thumbnail */}
-                <Image
-                  source={{ uri: thumbnailUri }}
-                  style={s.thumbnail}
-                  resizeMode="cover"
-                />
+                {/* Thumbnail + badge play */}
+                <View style={s.thumbnailWrapper}>
+                  <Image
+                    source={{ uri: thumbnailUri }}
+                    style={s.thumbnail}
+                    resizeMode="cover"
+                  />
+                  <View style={s.playOverlay}>
+                    <Ionicons
+                      name={item.type === 'video' ? 'play' : 'headset'}
+                      size={18}
+                      color="#fff"
+                    />
+                  </View>
+                </View>
 
                 {/* Infos */}
                 <View style={s.itemInfo}>
-                  <Text style={s.itemTitle} numberOfLines={1}>{item.title}</Text>
+                  <Text style={s.itemTitle} numberOfLines={2}>{item.title}</Text>
                   <View style={s.itemMeta}>
                     <Ionicons
-                      name={item.type === 'video' ? 'play-circle-outline' : 'headset-outline'}
-                      size={13}
+                      name={item.type === 'video' ? 'film-outline' : 'musical-notes-outline'}
+                      size={12}
                       color={colors.textMuted}
                     />
                     <Text style={s.itemMetaText}>{formatDuration(item.duration)}</Text>
-                    <Text style={s.itemMetaText}>·</Text>
+                    <Text style={s.itemMetaDot}>·</Text>
                     <Ionicons name="lock-closed-outline" size={11} color={colors.teal} />
                     <Text style={[s.itemMetaText, { color: colors.teal }]}>Chiffré</Text>
                   </View>
@@ -102,7 +130,7 @@ export default function OfflineScreen() {
                   </Text>
                 </View>
 
-                {/* Supprimer */}
+                {/* Bouton supprimer */}
                 <TouchableOpacity
                   style={s.deleteBtn}
                   onPress={() => handleDelete(item.contentId, item.title)}
@@ -124,7 +152,7 @@ export default function OfflineScreen() {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDuration(sec: number | null): string {
-  if (sec === null || sec === 0) return '--';
+  if (!sec) return '--';
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = Math.floor(sec % 60);
@@ -135,7 +163,9 @@ function formatDuration(sec: number | null): string {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+    return new Date(iso).toLocaleDateString('fr-FR', {
+      day: 'numeric', month: 'long',
+    });
   } catch {
     return '';
   }
@@ -144,25 +174,28 @@ function formatDate(iso: string): string {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: colors.bgBase },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'space-between' },
+  root:        { flex: 1, backgroundColor: colors.bgBase },
+  header:      { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'space-between' },
   backBtn:     { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 16, color: colors.textPrimary, fontFamily: 'Sora_600SemiBold' },
 
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40, paddingBottom: 80 },
+  empty:         { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40, paddingBottom: 80 },
   emptyTitle:    { fontSize: 18, color: colors.textPrimary, fontFamily: 'Sora_700Bold' },
   emptySubtitle: { fontSize: 14, color: colors.textSecond, fontFamily: 'DMSans_400Regular', textAlign: 'center', lineHeight: 20 },
-  browseBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 11, borderRadius: 24, backgroundColor: 'rgba(53,132,228,0.12)', borderWidth: 1, borderColor: 'rgba(53,132,228,0.3)' },
+  browseBtn:     { marginTop: 8, paddingHorizontal: 24, paddingVertical: 11, borderRadius: 24, backgroundColor: 'rgba(53,132,228,0.12)', borderWidth: 1, borderColor: 'rgba(53,132,228,0.3)' },
   browseBtnText: { color: colors.primary, fontFamily: 'DMSans_500Medium', fontSize: 14 },
 
-  list: { paddingHorizontal: 16, paddingVertical: 8, paddingBottom: 40 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
-  thumbnail: { width: 64, height: 88, borderRadius: 8, backgroundColor: colors.bgRaised },
-  itemInfo:  { flex: 1, gap: 3 },
-  itemTitle: { fontSize: 14, color: colors.textPrimary, fontFamily: 'DMSans_500Medium' },
-  itemMeta:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  itemMetaText: { fontSize: 12, color: colors.textMuted, fontFamily: 'DMSans_400Regular' },
-  itemDate:  { fontSize: 11, color: colors.textMuted, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  deleteBtn: { padding: 6 },
-  separator: { height: 1, backgroundColor: 'rgba(46,51,71,0.4)', marginLeft: 78 },
+  list:            { paddingHorizontal: 16, paddingVertical: 8, paddingBottom: 40 },
+  item:            { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
+  thumbnailWrapper:{ position: 'relative' },
+  thumbnail:       { width: 72, height: 52, borderRadius: 8, backgroundColor: colors.bgRaised },
+  playOverlay:     { position: 'absolute', inset: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 8 },
+  itemInfo:        { flex: 1, gap: 3 },
+  itemTitle:       { fontSize: 14, color: colors.textPrimary, fontFamily: 'DMSans_500Medium', lineHeight: 19 },
+  itemMeta:        { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  itemMetaText:    { fontSize: 12, color: colors.textMuted, fontFamily: 'DMSans_400Regular' },
+  itemMetaDot:     { fontSize: 12, color: colors.textMuted },
+  itemDate:        { fontSize: 11, color: colors.textMuted, fontFamily: 'DMSans_400Regular', marginTop: 2 },
+  deleteBtn:       { padding: 6 },
+  separator:       { height: 1, backgroundColor: 'rgba(46,51,71,0.4)', marginLeft: 86 },
 });

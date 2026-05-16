@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePurchaseStore }   from '@/stores/purchaseStore';
-import { API_BASE_URL, colors } from '@/lib/theme';
+import{BASE_URL, colors } from '@/lib/theme';
 
 export default function PurchasesScreen() {
   const purchases = usePurchaseStore((s) => s.purchases);
@@ -48,7 +48,7 @@ export default function PurchasesScreen() {
           renderItem={({ item }) => {
             const uri = item.thumbnail?.startsWith('http')
               ? item.thumbnail
-              : `${API_BASE_URL}${item.thumbnail}`;
+              : `${BASE_URL}${item.thumbnail}`;
             return (
               <TouchableOpacity
                 style={s.row}
@@ -83,6 +83,7 @@ function formatPrice(ar: number): string {
   if (ar >= 1000)      return `${(ar / 1000).toFixed(0)}k Ar`;
   return `${ar} Ar`;
 }
+
 
 const s = StyleSheet.create({
   root:    { flex: 1, backgroundColor: colors.bgBase },

@@ -42,7 +42,7 @@ export interface AdminContent {
   category:    string;
   accessType:  'free' | 'premium' | 'paid';
   isPublished: boolean;
-  provider:    { _id: string; username: string };
+  uploadedBy:    { _id: string; username: string };
   createdAt:   string;
 }
 

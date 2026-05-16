@@ -51,8 +51,8 @@ export default function AudioPlayerScreen() {
   const historyTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const {
-    track, isPlaying, position, duration,
-    setTrack, play, pause, setPosition, setDuration, setLoading, clear,
+    track, isPlaying, position, duration, soundInstance,
+    setTrack, play, pause, seek, updatePosition, setDuration, setLoading, clear, setSoundInstance,
   } = usePlayerStore();
 
   const [loading,   setLoadingLocal] = useState(true);
@@ -75,7 +75,12 @@ export default function AudioPlayerScreen() {
       playThroughEarpieceAndroid: false,
     }).catch(() => {});
 
-    loadAudio();
+    // Si on navigue vers ce même contenu déjà en lecture
+    if (usePlayerStore.getState().track?.contentId === id && usePlayerStore.getState().soundInstance) {
+      setLoadingLocal(false);
+    } else {
+      loadAudio();
+    }
 
     return () => {
       if (historyTimer.current) clearInterval(historyTimer.current);
@@ -120,9 +125,9 @@ export default function AudioPlayerScreen() {
       setLoading(true);
 
       // Détruire l'ancien son si existant
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
+      if (soundInstance) {
+        await soundInstance.unloadAsync();
+        setSoundInstance(null);
       }
 
       // Créer et démarrer le son
@@ -133,7 +138,7 @@ export default function AudioPlayerScreen() {
         onPlaybackUpdate
       );
       console.log("APRES")
-      soundRef.current = sound;
+      setSoundInstance(sound);
       setLoading(false);
       play(); // Démarrer manuellement via le store
       console.log("APRES LANCEMENT")
@@ -174,12 +179,12 @@ export default function AudioPlayerScreen() {
       const pos = (status.positionMillis ?? 0) / 1000;
       const dur = (status.durationMillis ?? 0) / 1000;
 
-      if (!isScrubbing) setPosition(pos);
+      if (!isScrubbing) updatePosition(pos);
       setDuration(dur);
 
       if (status.didJustFinish) {
         pause();
-        setPosition(0);
+        updatePosition(0);
         saveHistory(true);
       }
     },
@@ -187,15 +192,7 @@ export default function AudioPlayerScreen() {
   );
 
   // ── Sync play/pause store → Sound ──────────────────────────────────────────
-
-  useEffect(() => {
-    if (!soundRef.current) return;
-    if (isPlaying) {
-      soundRef.current.playAsync().catch(() => {});
-    } else {
-      soundRef.current.pauseAsync().catch(() => {});
-    }
-  }, [isPlaying]);
+  // The store now directly controls playAsync and pauseAsync on soundInstance!
 
   useEffect(() => {
     historyTimer.current = setInterval(() => saveHistory(), HISTORY_INTERVAL);
@@ -205,10 +202,7 @@ export default function AudioPlayerScreen() {
   // ── Seek ────────────────────────────────────────────────────────────────────
 
   const handleSeek = async (newPosition: number) => {
-    setPosition(newPosition);
-    if (soundRef.current) {
-      await soundRef.current.setPositionAsync(newPosition * 1000);
-    }
+    seek(newPosition);
   };
 
   // ── Rendu ───────────────────────────────────────────────────────────────────

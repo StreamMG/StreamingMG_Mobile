@@ -15,8 +15,10 @@
  * Tous les fichiers importent cette constante depuis ici.
  * Ne plus écrire "localhost:3001" nulle part ailleurs.
  */
+console.log("- - - - - - - - - --  -- - - - -")
+console.log("URL de base API (mobile) :", process.env.EXPO_PUBLIC_LOCAL_URL)
 export const BASE_URL = __DEV__
-  ? process.env.EXPO_PUBLIC_LOCAL_URL || 'http://streammg.alwaysdata.net'
+  ? process.env.EXPO_PUBLIC_LOCAL_URL
   : 'https://streammg.alwaysdata.net' 
 console.log("- - - - - - - - - --  -- - - - -")
 console.log(process.env.EXPO_PUBLIC_LOCAL_URL)

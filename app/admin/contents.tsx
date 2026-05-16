@@ -33,6 +33,9 @@ export default function AdminContentsScreen() {
   const { contents, total, loading, error, refresh, approve, reject, remove } =
     useAdminContents(filter);
 
+    // console.log('- - - - - - - - - -')
+    // console.log(contents[0]);
+
   const handleApprove = (item: AdminContent) => {
     Alert.alert(
       'Approuver le contenu',
@@ -173,7 +176,7 @@ function ContentModerationRow({ item, onApprove, onReject, onDelete }: {
       <Image source={{ uri }} style={s.thumbnail} resizeMode="cover" />
       <View style={s.rowInfo}>
         <Text style={s.rowTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={s.rowProvider}>Par {item.provider?.username ?? '—'}</Text>
+        <Text style={s.rowProvider}>Par {item.uploadedBy?.username ?? '—'}</Text>
         <Text style={s.rowMeta}>{item.category} · {item.type === 'video' ? 'Vidéo' : 'Audio'} · {item.accessType}</Text>
       </View>
       <View style={s.rowActions}>

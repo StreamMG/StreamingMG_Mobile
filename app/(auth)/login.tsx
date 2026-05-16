@@ -72,8 +72,9 @@ export default function LoginScreen() {
         email: email.trim().toLowerCase(),
         password,
       });
-    //  console.log("-----------")
-    //   console.log(data);
+     console.log("------------ - - - - - - - - - -  - - - ")
+      console.log(data);
+      
       await setAuth(data.token, data.user, data.refreshToken ?? '');
       switch (data.user.role) {
         case 'admin':
@@ -112,7 +113,7 @@ export default function LoginScreen() {
   return (
     <SafeAreaView className="flex-1 bg-[#0d1018]">
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         className="flex-1"
       >
         {/* ── Header ── */}

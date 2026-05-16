@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useHistory }         from '@/hooks/useHistory';
-import { API_BASE_URL, colors } from '@/lib/theme';
+import { BASE_URL, colors } from '@/lib/theme';
 
 export default function HistoryScreen() {
   const { history, loading, error, refresh } = useHistory();
@@ -71,7 +71,7 @@ export default function HistoryScreen() {
 function HistoryRow({ item }: { item: ReturnType<typeof useHistory>['history'][0] }) {
   const thumbnailUri = item.content.thumbnail?.startsWith('http')
     ? item.content.thumbnail
-    : `${API_BASE_URL}${item.content.thumbnail}`;
+    : `${BASE_URL}${item.content.thumbnail}`;
 
   const progress = item.content.duration > 0
     ? Math.round((item.progress / item.content.duration) * 100)

@@ -1,0 +1,2926 @@
+This file is a merged representation of a subset of the codebase, containing specifically included files and files not matching ignore patterns, combined into a single document by Repomix.
+
+# File Summary
+
+## Purpose
+This file contains a packed representation of a subset of the repository's contents that is considered the most important context.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+
+## File Format
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  a. A header with the file path (## File: path/to/file)
+  b. The full contents of the file in a code block
+
+## Usage Guidelines
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+
+## Notes
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Only files matching these patterns are included: app/player/video/**/*, app/download/**/*, app/(options)/download.tsx, app/offline.tsx, app/content/[id].tsx, app/_layout.tsx, components/player/**/*, hooks/useDownload.ts, hooks/useContentDetail.ts, components/content/useContentDetail.ts, stores/downloadStore.ts, stores/playerStore.ts, lib/apiClient.ts, package.json, tsconfig.json, app.json, tailwind.config.js, metro.config.js, babel.config.js, eslint.config.js
+- Files matching these patterns are excluded: **/node_modules/**, **/.git/**, **/.expo/**, **/.vscode/**, **/*.zip, package-lock.json
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+
+# Directory Structure
+```
+app.json
+app/_layout.tsx
+app/(options)/download.tsx
+app/content/[id].tsx
+app/download/[id].tsx
+app/offline.tsx
+app/player/video/_layout.tsx
+app/player/video/[id].tsx
+app/player/video/id.tsx
+babel.config.js
+components/content/useContentDetail.ts
+components/player/MiniPlayer.tsx
+eslint.config.js
+hooks/useContentDetail.ts
+hooks/useDownload.ts
+lib/apiClient.ts
+metro.config.js
+package.json
+stores/downloadStore.ts
+stores/playerStore.ts
+tailwind.config.js
+tsconfig.json
+```
+
+# Files
+
+## File: app/(options)/download.tsx
+```typescript
+
+```
+
+## File: app/player/video/_layout.tsx
+```typescript
+/**
+ * app/player/video/_layout.tsx
+ * app/player/audio/_layout.tsx
+ *
+ * Stack sans header pour les deux groupes lecteur.
+ * Fichier identique — à copier dans les deux dossiers.
+ */
+
+import { Stack } from 'expo-router';
+
+export default function PlayerLayout() {
+  return <Stack screenOptions={{ headerShown: false, animation: 'slide_from_bottom' }} />;
+}
+```
+
+## File: app/player/video/id.tsx
+```typescript
+/**
+ * app/player/video/[id].tsx — Lecteur vidéo HLS Optimisé
+ */
+
+import React, { useEffect, useRef, useCallback, useState } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  ActivityIndicator,
+  StyleSheet,
+  StatusBar,
+  Dimensions,
+} from 'react-native';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { apiClient } from '@/lib/apiClient';
+import { colors, BASE_URL } from '@/lib/theme';
+
+// ─── Constantes & Helpers ───────────────────────────────────────────────────
+
+const HISTORY_INTERVAL_MS = 10_000;
+
+function formatTime(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+  return `${m}:${pad(s)}`;
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+// ─── Sous-composant ProgressBar (Mémoïsé pour la performance) ───────────────
+
+const ProgressBar = React.memo(function ProgressBar({ progress }: { progress: number }) {
+  return (
+    <View style={s.progressTrack}>
+      <View
+        style={[
+          s.progressFill,
+          { width: `${Math.min(100, Math.max(0, progress * 100))}%` },
+        ]}
+      />
+    </View>
+  );
+});
+
+// ─── Composant Principal ─────────────────────────────────────────────────────
+
+export default function VideoPlayerScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  // Refs pour la logique métier (pas de re-render)
+  const videoRef = useRef<Video>(null);
+  const positionRef = useRef(0);
+  const durationRef = useRef(0);
+  const historyTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // States pour l'UI
+  const [hlsUrl, setHlsUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
+  const [showCtrl, setShowCtrl] = useState(true);
+  const [title, setTitle] = useState('');
+  
+  // State dédié uniquement à la barre de progression
+  const [progress, setProgress] = useState(0);
+
+  // ── Orientation ─────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, []);
+
+  // ── Chargement ──────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (id) loadToken();
+  }, [id]);
+
+  const loadToken = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: detail } = await apiClient.get(`/contents/${id}`);
+      setTitle(detail.title);
+
+      const { data } = await apiClient.get(`/hls/${id}/token`);
+      setHlsUrl(`${BASE_URL}${data.hlsUrl}`);
+
+      apiClient.post(`/contents/${id}/view`).catch(() => {});
+    } catch (e: any) {
+      if (e?.response?.status === 403) {
+        router.back();
+      } else {
+        setError('Impossible de charger la vidéo.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Historique ──────────────────────────────────────────────────────────────
+
+  const saveHistory = useCallback(async (completed = false) => {
+    if (!id || positionRef.current === 0) return;
+    try {
+      await apiClient.post(`/history/${id}`, {
+        progress: Math.floor(positionRef.current),
+        duration: Math.floor(durationRef.current),
+        completed,
+      });
+    } catch { /* Silencieux */ }
+  }, [id]);
+
+  useEffect(() => {
+    historyTimer.current = setInterval(() => saveHistory(), HISTORY_INTERVAL_MS);
+    return () => {
+      if (historyTimer.current) clearInterval(historyTimer.current);
+      saveHistory();
+    };
+  }, [saveHistory]);
+
+  // ── Playback status (Le cœur de l'optimisation) ─────────────────────────────
+
+  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    if (!status.isLoaded) return;
+
+    // Mise à jour des refs pour la logique (sans re-render)
+    positionRef.current = status.positionMillis / 1000;
+    durationRef.current = (status.durationMillis??0) / 1000;
+
+    // Mise à jour du state UI uniquement si les contrôles sont visibles
+    if (showCtrl && (status.durationMillis??0) > 0) {
+      setProgress(status.positionMillis / (status.durationMillis??0));
+    }
+
+    // Complétion à 90%
+    if (durationRef.current > 0 && positionRef.current / durationRef.current >= 0.9) {
+      saveHistory(true);
+    }
+  }, [showCtrl, saveHistory]);
+
+  // ── Contrôles ───────────────────────────────────────────────────────────────
+
+  const togglePlay = async () => {
+    if (!videoRef.current) return;
+    if (paused) {
+      await videoRef.current.playAsync();
+      setPaused(false);
+    } else {
+      await videoRef.current.pauseAsync();
+      setPaused(true);
+    }
+  };
+
+  const seek = async (seconds: number) => {
+    if (!videoRef.current) return;
+    const newPos = Math.max(0, (positionRef.current + seconds) * 1000);
+    await videoRef.current.setPositionAsync(newPos);
+  };
+
+  const toggleControls = () => {
+    setShowCtrl((v) => !v);
+  };
+
+  // ── Rendu ───────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <View style={s.centered}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={s.loadingText}>Chargement…</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={s.centered}>
+        <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
+        <Text style={s.errorText}>{error}</Text>
+        <TouchableOpacity style={s.retryBtn} onPress={loadToken}>
+          <Text style={s.retryText}>Réessayer</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={s.root}>
+      <StatusBar hidden />
+
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        onPress={toggleControls}
+        activeOpacity={1}
+      >
+        <Video
+          ref={videoRef}
+          source={{ uri: hlsUrl! }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay
+          
+          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+          useNativeControls={false}
+        />
+      </TouchableOpacity>
+
+      {showCtrl && (
+        <View style={s.overlay} pointerEvents="box-none">
+          {/* Header */}
+          <SafeAreaView style={s.header} edges={['top', 'left', 'right']}>
+            <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+              <Ionicons name="chevron-down" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={s.titleText} numberOfLines={1}>{title}</Text>
+            <View style={{ width: 40 }} />
+          </SafeAreaView>
+
+          {/* Centre */}
+          <View style={s.centerControls}>
+            <TouchableOpacity onPress={() => seek(-10)}>
+              <Ionicons name="play-back" size={28} color="#fff" />
+              <Text style={s.seekLabel}>10</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.playBtn} onPress={togglePlay}>
+              <Ionicons name={paused ? 'play' : 'pause'} size={32} color="#fff" style={paused ? { marginLeft: 3 } : {}} />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => seek(10)}>
+              <Ionicons name="play-forward" size={28} color="#fff" />
+              <Text style={s.seekLabel}>10</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Footer avec Barre de Progression Optimisée */}
+          <SafeAreaView style={s.footer} edges={['bottom', 'left', 'right']}>
+            <Text style={s.timeText}>{formatTime(positionRef.current)}</Text>
+            <ProgressBar progress={progress} />
+            <Text style={s.timeText}>{formatTime(durationRef.current)}</Text>
+          </SafeAreaView>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: '#000' },
+  centered: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', gap: 16 },
+  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, backgroundColor: 'rgba(0,0,0,0.45)' },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  titleText: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 15, fontFamily: 'Sora_600SemiBold' },
+  centerControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 48 },
+  playBtn: { 
+    width: 68, height: 68, borderRadius: 34, 
+    backgroundColor: 'rgba(255,255,255,0.18)', 
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', 
+    alignItems: 'center', justifyContent: 'center' 
+  },
+  seekLabel: { color: '#fff', fontSize: 11, textAlign: 'center', marginTop: 2, opacity: 0.8 },
+  footer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, gap: 10, backgroundColor: 'rgba(0,0,0,0.45)' },
+  progressTrack: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' },
+  progressFill: { height: 4, backgroundColor: colors.primary, borderRadius: 2 },
+  timeText: { color: '#fff', fontSize: 12, opacity: 0.85, minWidth: 45, textAlign: 'center' },
+  loadingText: { color: colors.textSecond, fontSize: 14 },
+  errorText: { color: colors.textSecond, textAlign: 'center', paddingHorizontal: 32 },
+  retryBtn: { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(53,132,228,0.15)', borderWidth: 1, borderColor: 'rgba(53,132,228,0.3)' },
+  retryText: { color: colors.primary, fontSize: 14 },
+});
+```
+
+## File: babel.config.js
+```javascript
+module.exports = function (api) {
+  api.cache(true);
+  return {
+    presets: [['babel-preset-expo',{ jsxImportSource: "nativewind" }],
+    "nativewind/babel"],
+  };
+};
+```
+
+## File: components/content/useContentDetail.ts
+```typescript
+/**
+ * hooks/useContentDetail.ts
+ *
+ * Données complètes pour l'écran de détail d'un contenu.
+ * Gère : métadonnées, droits d'accès, leçons tutoriel, progression.
+ */
+
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '@/lib/apiClient';
+import { useAuthStore } from '@/stores/authStore';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface Lesson {
+  index: number;
+  title: string;
+  duration: number;
+  thumbnail: string | null;
+}
+
+export interface ContentDetail {
+  _id: string;
+  title: string;
+  description: string;
+  type: 'video' | 'audio';
+  category: string;
+  thumbnail: string;
+  duration: number;
+  accessType: 'free' | 'premium' | 'paid';
+  price: number | null;
+  isTutorial: boolean;
+  artist: string | null;
+  album: string | null;
+  language: string | null;
+  viewCount: number;
+  provider: { _id: string; username: string };
+  createdAt: string;
+  // Rating — champs futurs optionnels
+  rating?: number | null;
+  ratingCount?: number | null;
+}
+
+export interface TutorialData {
+  totalLessons: number;
+  lessons: Lesson[];
+  percentComplete: number;       // 0 si non connecté
+  completedLessons: number[];    // indices complétés
+  lastLessonIndex: number;       // -1 si pas commencé
+}
+
+export type AccessStatus =
+  | 'granted'              // accès libre ou droits confirmés
+  | 'login_required'       // visiteur
+  | 'subscription_required'
+  | 'purchase_required'
+  | 'loading'
+  | 'error';
+
+interface UseContentDetailReturn {
+  content: ContentDetail | null;
+  tutorial: TutorialData | null;
+  accessStatus: AccessStatus;
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useContentDetail(id: string): UseContentDetailReturn {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user            = useAuthStore((s) => s.user);
+
+  const [content,      setContent]      = useState<ContentDetail | null>(null);
+  const [tutorial,     setTutorial]     = useState<TutorialData | null>(null);
+  const [accessStatus, setAccessStatus] = useState<AccessStatus>('loading');
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState<string | null>(null);
+
+  const fetchDetail = useCallback(async () => {
+    if (!id) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 1. Métadonnées publiques
+      const { data: detail } = await apiClient.get<ContentDetail>(`/contents/${id}`);
+      setContent(detail);
+
+      // 2. Déterminer l'accès côté client (optimiste — le vrai contrôle est backend)
+      const access = resolveAccessStatus(detail, isAuthenticated, user);
+      setAccessStatus(access);
+
+      // 3. Leçons tutoriel — seulement si tutoriel ET accès probable
+      if (detail.isTutorial && access === 'granted') {
+        try {
+          const { data: lessonData } = await apiClient.get(`/contents/${id}/lessons`);
+          let percentComplete  = 0;
+          let completedLessons: number[] = [];
+          let lastLessonIndex  = -1;
+
+          // Progression — seulement si connecté
+          if (isAuthenticated) {
+            try {
+              const { data: progressData } = await apiClient.get('/tutorial/progress');
+              const found = (progressData.inProgress ?? []).find(
+                (p: any) => p.contentId?._id === id || p.contentId === id
+              );
+              if (found) {
+                percentComplete  = found.percentComplete ?? 0;
+                completedLessons = found.completedLessons ?? [];
+                lastLessonIndex  = found.lastLessonIndex ?? -1;
+              }
+            } catch {
+              // Silencieux — progression non disponible
+            }
+          }
+
+          setTutorial({
+            totalLessons:    lessonData.totalLessons,
+            lessons:         lessonData.lessons,
+            percentComplete,
+            completedLessons,
+            lastLessonIndex,
+          });
+        } catch (e: any) {
+          // 403 sur /lessons → access gate géré par l'intercepteur
+          // On ne bloque pas le reste de l'écran
+        }
+      }
+
+      // 4. Incrémenter vues (fire & forget)
+      apiClient.post(`/contents/${id}/view`).catch(() => {});
+
+    } catch (e: any) {
+      if (e?.response?.status === 404) {
+        setError('Ce contenu est introuvable.');
+      } else {
+        setError('Impossible de charger le contenu.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [id, isAuthenticated, user]);
+
+  useEffect(() => {
+    fetchDetail();
+  }, [fetchDetail]);
+
+  return { content, tutorial, accessStatus, loading, error, refresh: fetchDetail };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function resolveAccessStatus(
+  content: ContentDetail,
+  isAuthenticated: boolean,
+  user: any
+): AccessStatus {
+  if (content.accessType === 'free') return 'granted';
+
+  if (!isAuthenticated) return 'login_required';
+
+  if (content.accessType === 'premium') {
+    return user?.isPremium ? 'granted' : 'subscription_required';
+  }
+
+  // 'paid' — le backend valide les achats, ici on affiche l'écran d'achat
+  // L'intercepteur 403 prend le relais si l'utilisateur tente de lancer la lecture
+  return 'purchase_required';
+}
+```
+
+## File: eslint.config.js
+```javascript
+// https://docs.expo.dev/guides/using-eslint/
+const { defineConfig } = require('eslint/config');
+const expoConfig = require('eslint-config-expo/flat');
+
+module.exports = defineConfig([
+  expoConfig,
+  {
+    ignores: ['dist/*'],
+  },
+]);
+```
+
+## File: metro.config.js
+```javascript
+const { getDefaultConfig } = require("expo/metro-config");
+const { withNativeWind } = require('nativewind/metro');
+ 
+const config = getDefaultConfig(__dirname)
+ 
+module.exports = withNativeWind(config, { input: './styles/global.css' })
+```
+
+## File: stores/playerStore.ts
+```typescript
+/**
+ * stores/playerStore.ts
+ *
+ * État global du lecteur audio.
+ *
+ * dismiss() → cache le MiniPlayer sans arrêter la lecture.
+ *             L'utilisateur peut le rouvrir via /player/audio/:id.
+ * clear()   → vide complètement (déconnexion, nouveau contenu).
+ */
+
+import { create } from 'zustand';
+
+export interface AudioTrack {
+  contentId: string;
+  title:     string;
+  artist:    string | null;
+  coverArt:  string;
+  audioUrl:  string;
+  duration:  number;
+}
+
+interface PlayerState {
+  track:      AudioTrack | null;
+  isPlaying:  boolean;
+  position:   number;
+  duration:   number;
+  isLoading:  boolean;
+  visible:    boolean;        // ← contrôle l'affichage du MiniPlayer
+
+  setTrack:    (track: AudioTrack) => void;
+  play:        () => void;
+  pause:       () => void;
+  setPosition: (pos: number) => void;
+  setDuration: (dur: number) => void;
+  setLoading:  (val: boolean) => void;
+  dismiss:     () => void;   // ← cache sans arrêter
+  clear:       () => void;   // ← vide tout
+}
+
+export const usePlayerStore = create<PlayerState>((set) => ({
+  track:     null,
+  isPlaying: false,
+  position:  0,
+  duration:  0,
+  isLoading: false,
+  visible:   false,
+
+  setTrack:    (track)     => set({ track, position: 0, isPlaying: false, isLoading: true, visible: true }),
+  play:        ()          => set({ isPlaying: true }),
+  pause:       ()          => set({ isPlaying: false }),
+  setPosition: (position)  => set({ position }),
+  setDuration: (duration)  => set({ duration }),
+  setLoading:  (isLoading) => set({ isLoading }),
+  dismiss:     ()          => set({ visible: false }),
+  clear:       ()          => set({ track: null, isPlaying: false, position: 0, duration: 0, visible: false }),
+}));
+```
+
+## File: tailwind.config.js
+```javascript
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  // NOTE: On a supprimé l'espace après le deuxième astérisque
+  content: [
+    "./app/**/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}"
+  ],
+  presets: [require("nativewind/preset")],
+  theme: {
+    extend: {},
+  },
+  plugins: [],
+};
+```
+
+## File: app/download/[id].tsx
+```typescript
+/**
+ * app/download/[id].tsx — Écran de téléchargement
+ *
+ * Flux :
+ *  1. Charge les métadonnées du contenu
+ *  2. Lance useDownload.start()
+ *  3. Affiche progression + état
+ *  4. Succès → retour ou navigation hors-ligne
+ *
+ * Route : /download/:id
+ * Importe : useDownload, useDownloadStore, colors
+ */
+
+import React, { useEffect, useState } from 'react';
+import {
+  View, Text, TouchableOpacity,
+  ActivityIndicator, StyleSheet,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
+import { useDownload }      from '@/hooks/useDownload';
+import { useDownloadStore } from '@/stores/downloadStore';
+import { apiClient }        from '@/lib/apiClient';
+import { colors }           from '@/lib/theme';
+import { useAuthStore } from '@/stores/authStore';
+
+export default function DownloadScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { start, cancel, progress, status, error } = useDownload();
+  const isDownloaded = useDownloadStore((s) => s.isDownloaded);
+
+  const [contentTitle, setContentTitle] = useState('');
+  const [loadingMeta,  setLoadingMeta]  = useState(true);
+
+  // Charger les métadonnées puis lancer le téléchargement
+  useEffect(() => {
+    if (!id) return;
+
+    const init = async () => {
+      try {
+        const { data } = await apiClient.get(`/contents/${id}`);
+        setContentTitle(data.title);
+        setLoadingMeta(false);
+
+        // Si déjà téléchargé → pas besoin de relancer
+        if (isDownloaded(id)) return;
+
+        await start(id, data.title, data.thumbnail, data.type, data.duration);
+      } catch {
+        setLoadingMeta(false);
+      }
+    };
+
+    init();
+
+    return () => {
+      // Ne pas annuler si on quitte — le download continue en arrière-plan
+    };
+  }, [id, isDownloaded, start]);
+
+  // ── Rendu ──────────────────────────────────────────────────────────────────
+
+  const alreadyDone = isDownloaded(id ?? '');
+
+
+  if (!isAuthenticated) {
+      return (
+        <SafeAreaView style={s.centered}>
+          <View style={s.loginPrompt}>
+            <Ionicons name="person-outline" size={48} color={colors.textMuted} style={{ marginBottom: 16 }} />
+            <Text style={s.loginPromptTitle}>Connectez-vous pour télecharger le contenu</Text>
+            <TouchableOpacity style={s.loginBtn} onPress={() => router.push('/(auth)/login')}>
+              <Text style={s.loginBtnText}>Se connecter</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      );
+}
+
+  return (
+    <SafeAreaView style={s.root} edges={['top', 'bottom']}>
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity
+          style={s.backBtn}
+          onPress={() => router.back()}
+          accessibilityLabel="Retour"
+        >
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>Téléchargement</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <View style={s.body}>
+        {/* Icône */}
+        <View style={[
+          s.iconCircle,
+          status === 'complete' || alreadyDone
+            ? { backgroundColor: 'rgba(87,227,137,0.12)' }
+            : status === 'error'
+            ? { backgroundColor: 'rgba(237,51,59,0.12)' }
+            : { backgroundColor: 'rgba(53,132,228,0.12)' },
+        ]}>
+          <Ionicons
+            name={
+              status === 'complete' || alreadyDone ? 'checkmark-circle'
+              : status === 'error' ? 'alert-circle'
+              : 'download'
+            }
+            size={48}
+            color={
+              status === 'complete' || alreadyDone ? colors.success
+              : status === 'error' ? colors.error
+              : colors.primary
+            }
+          />
+        </View>
+
+        {/* Titre */}
+        <Text style={s.title} numberOfLines={2}>
+          {loadingMeta ? '...' : contentTitle}
+        </Text>
+
+        {/* État */}
+        {(status === 'idle' || status === 'pending' || loadingMeta) && !alreadyDone && (
+          <>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={s.statusText}>Préparation du téléchargement…</Text>
+          </>
+        )}
+
+        {status === 'downloading' && (
+          <>
+            {/* Barre de progression */}
+            <View style={s.progressTrack}>
+              <View style={[s.progressFill, { width: `${progress}%` }]} />
+            </View>
+            <Text style={s.progressText}>{progress}%</Text>
+            <Text style={s.statusText}>Téléchargement en cours…</Text>
+
+            {/* Annuler */}
+            <TouchableOpacity style={s.cancelBtn} onPress={cancel}>
+              <Text style={s.cancelText}>Annuler</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {(status === 'complete' || alreadyDone) && (
+          <>
+            <Text style={s.successText}>
+              {alreadyDone && status !== 'complete'
+                ? 'Ce contenu est déjà disponible hors-ligne.'
+                : 'Téléchargement terminé !'}
+            </Text>
+            <TouchableOpacity
+              style={s.primaryBtn}
+              onPress={() => router.push('/offline')}
+            >
+              <Text style={s.primaryBtnText}>Voir mes téléchargements</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={s.ghostBtn}
+              onPress={() => router.back()}
+            >
+              <Text style={s.ghostBtnText}>Retour au contenu</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {status === 'error' && (
+          <>
+            <Text style={s.errorText}>{error}</Text>
+            <TouchableOpacity
+              style={s.primaryBtn}
+              onPress={() => router.back()}
+            >
+              <Text style={s.primaryBtnText}>Retour</Text>
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root:    { flex: 1, backgroundColor: colors.bgBase },
+  header:  { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'space-between' },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 16, color: colors.textPrimary, fontFamily: 'Sora_600SemiBold' },
+
+  body: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 16,
+  },
+
+  iconCircle: {
+    width: 96, height: 96, borderRadius: 48,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 8,
+  },
+
+  title: {
+    fontSize: 20, color: colors.textPrimary,
+    fontFamily: 'Sora_700Bold', textAlign: 'center',
+    letterSpacing: -0.3,
+  },
+
+  progressTrack: {
+    width: '100%', height: 6,
+    backgroundColor: colors.bgRaised,
+    borderRadius: 3, overflow: 'hidden',
+  },
+  progressFill: {
+    height: 6, backgroundColor: colors.primary, borderRadius: 3,
+  },
+  progressText: {
+    fontSize: 24, color: colors.primary,
+    fontFamily: 'Sora_700Bold',
+  },
+
+  statusText:  { fontSize: 14, color: colors.textSecond, fontFamily: 'DMSans_400Regular', textAlign: 'center' },
+  successText: { fontSize: 14, color: colors.success,    fontFamily: 'DMSans_400Regular', textAlign: 'center' },
+  errorText:   { fontSize: 14, color: colors.error,      fontFamily: 'DMSans_400Regular', textAlign: 'center' },
+
+  primaryBtn: {
+    width: '100%', paddingVertical: 14, borderRadius: 28,
+    backgroundColor: colors.primary, alignItems: 'center',
+    shadowColor: colors.primary, shadowOpacity: 0.35, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 }, elevation: 5,
+  },
+  primaryBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Sora_600SemiBold' },
+
+  ghostBtn: { width: '100%', paddingVertical: 12, alignItems: 'center' },
+  ghostBtnText: { color: colors.textSecond, fontSize: 14, fontFamily: 'DMSans_400Regular' },
+
+  cancelBtn: {
+    paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20,
+    backgroundColor: 'rgba(237,51,59,0.1)',
+    borderWidth: 1, borderColor: 'rgba(237,51,59,0.3)',
+  },
+  cancelText: { color: colors.error, fontFamily: 'DMSans_500Medium', fontSize: 14 },
+  centered:{ flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  loginPrompt: { alignItems: 'center', paddingHorizontal: 32, gap: 16 },
+  loginPromptTitle: { fontSize: 16, color: colors.textPrimary, fontFamily: 'Sora_600SemiBold', textAlign: 'center', marginBottom: 8 },
+  loginBtn: { paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12, backgroundColor: colors.primary, alignItems: 'center' },
+  loginBtnText: { color: '#fff', fontFamily: 'Sora_600SemiBold', fontSize: 14 },
+});
+```
+
+## File: stores/downloadStore.ts
+```typescript
+/**
+ * stores/downloadStore.ts
+ *
+ * Gère :
+ *  - La liste des contenus téléchargés (hors-ligne)
+ *  - L'état de progression des téléchargements en cours
+ *
+ * Stockage persistant : expo-secure-store pour les clés AES
+ * Fichiers chiffrés   : Constants.documentDirectory/offline/<id>.enc
+ *
+ * Utilisé par :
+ *   app/download/[id].tsx   → setProgress, markComplete, markError
+ *   app/offline.tsx         → downloads, removeDownload
+ *   components/content/ContentCard → isDownloaded (futur badge)
+ */
+
+import { create } from 'zustand';
+import { deleteAsync } from 'expo-file-system';
+import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type DownloadStatus = 'pending' | 'downloading' | 'complete' | 'error';
+
+export interface DownloadedContent {
+  contentId:   string;
+  title:       string;
+  thumbnail:   string;
+  type:        'video' | 'audio';
+  duration:    number;
+  filePath:    string;   // chemin local chiffré
+  downloadedAt:string;
+}
+
+export interface ActiveDownload {
+  contentId:  string;
+  title:      string;
+  status:     DownloadStatus;
+  progress:   number;   // 0–100
+  error?:     string;
+}
+
+interface DownloadState {
+  downloads:       DownloadedContent[];
+  activeDownloads: Record<string, ActiveDownload>;
+
+  // Lecture
+  isDownloaded:    (contentId: string) => boolean;
+  getFilePath:     (contentId: string) => string;
+
+  // Actions download
+  startDownload:   (contentId: string, title: string) => void;
+  setProgress:     (contentId: string, progress: number) => void;
+  markComplete:    (content: DownloadedContent) => void;
+  markError:       (contentId: string, error: string) => void;
+  cancelDownload:  (contentId: string) => void;
+
+  // Gestion bibliothèque
+  removeDownload:  (contentId: string) => Promise<void>;
+  loadDownloads:   () => Promise<void>;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const OFFLINE_DIR = `${Constants.documentDirectory}offline/`;
+const STORE_KEY   = process.env.STORE_KEY as string
+// 'streamMG_downloads';
+
+function getFilePath(contentId: string) {
+  return `${OFFLINE_DIR}${contentId}.enc`;
+}
+
+// ─── Store ────────────────────────────────────────────────────────────────────
+
+export const useDownloadStore = create<DownloadState>((set, get) => ({
+  downloads:       [],
+  activeDownloads: {},
+
+  isDownloaded: (contentId) =>
+    get().downloads.some((d) => d.contentId === contentId),
+
+  getFilePath: (contentId) => getFilePath(contentId),
+
+  startDownload: (contentId, title) =>
+    set((state) => ({
+      activeDownloads: {
+        ...state.activeDownloads,
+        [contentId]: { contentId, title, status: 'pending', progress: 0 },
+      },
+    })),
+
+  setProgress: (contentId, progress) =>
+    set((state) => ({
+      activeDownloads: {
+        ...state.activeDownloads,
+        [contentId]: {
+          ...state.activeDownloads[contentId],
+          status: 'downloading',
+          progress,
+        },
+      },
+    })),
+
+  markComplete: (content) => {
+    set((state) => {
+      const { [content.contentId]: _, ...rest } = state.activeDownloads;
+      const existing = state.downloads.filter((d) => d.contentId !== content.contentId);
+      const updated  = [...existing, content];
+
+      // Persister la liste
+      SecureStore.setItemAsync(STORE_KEY, JSON.stringify(updated)).catch(() => {});
+
+      return { downloads: updated, activeDownloads: rest };
+    });
+  },
+
+  markError: (contentId, error) =>
+    set((state) => ({
+      activeDownloads: {
+        ...state.activeDownloads,
+        [contentId]: { ...state.activeDownloads[contentId], status: 'error', error },
+      },
+    })),
+
+  cancelDownload: (contentId) =>
+    set((state) => {
+      const { [contentId]: _, ...rest } = state.activeDownloads;
+      return { activeDownloads: rest };
+    }),
+
+  removeDownload: async (contentId) => {
+    // Supprimer le fichier chiffré
+    const path = getFilePath(contentId);
+    await deleteAsync(path, { idempotent: true }).catch(() => {});
+
+    // Supprimer la clé AES
+    await SecureStore.deleteItemAsync(`aes_${contentId}`).catch(() => {});
+
+    set((state) => {
+      const updated = state.downloads.filter((d) => d.contentId !== contentId);
+      SecureStore.setItemAsync(STORE_KEY, JSON.stringify(updated)).catch(() => {});
+      return { downloads: updated };
+    });
+  },
+
+  loadDownloads: async () => {
+    try {
+      const raw = await SecureStore.getItemAsync(STORE_KEY);
+      if (raw) {
+        const downloads: DownloadedContent[] = JSON.parse(raw);
+        set({ downloads });
+      }
+    } catch {
+      // Silencieux — bibliothèque vide
+    }
+  },
+}));
+```
+
+## File: tsconfig.json
+```json
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ]
+}
+```
+
+## File: app.json
+```json
+{
+  "expo": {
+    "name": "streamMG",
+    "slug": "streamingMG",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/logo.png",
+    "scheme": "streamingmg",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundImage": "./assets/images/android-icon-background.png",
+        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.tsiarofyluc.streammg"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff",
+          "dark": {
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a14e4c1e-5407-4ec6-88c3-8f859e112c7f"
+      }
+    }
+  }
+}
+```
+
+## File: app/offline.tsx
+```typescript
+/**
+ * app/offline.tsx — Bibliothèque hors-ligne
+ *
+ * Liste tous les contenus téléchargés avec option de suppression.
+ *
+ * Route : /offline
+ * Importe : downloadStore, colors
+ */
+
+import React from 'react';
+import {
+  View, Text, FlatList, TouchableOpacity,
+  Alert, StyleSheet, Image,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
+import { useDownloadStore } from '@/stores/downloadStore';
+import { BASE_URL, colors } from '@/lib/theme';
+
+export default function OfflineScreen() {
+  const { downloads, removeDownload } = useDownloadStore();
+
+  const handleDelete = (contentId: string, title: string) => {
+    Alert.alert(
+      'Supprimer le téléchargement',
+      `Supprimer "${title}" de vos téléchargements ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Supprimer',
+          style: 'destructive',
+          onPress: () => removeDownload(contentId),
+        },
+      ]
+    );
+  };
+
+  return (
+    <SafeAreaView style={s.root} edges={['top']}>
+      {/* Header */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+          <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={s.headerTitle}>Téléchargements</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {downloads.length === 0 ? (
+        <View style={s.empty}>
+          <Ionicons name="download-outline" size={56} color={colors.textMuted} style={{ opacity: 0.3 }} />
+          <Text style={s.emptyTitle}>Aucun téléchargement</Text>
+          <Text style={s.emptySubtitle}>
+            Les contenus téléchargés apparaîtront ici pour une lecture hors-ligne.
+          </Text>
+          <TouchableOpacity style={s.browseBtn} onPress={() => router.replace('/(tabs)')}>
+            <Text style={s.browseBtnText}>Parcourir le catalogue</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          data={downloads}
+          keyExtractor={(item) => item.contentId}
+          contentContainerStyle={s.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => {
+            const thumbnailUri = item.thumbnail?.startsWith('http')
+              ? item.thumbnail
+              : `${BASE_URL}${item.thumbnail}`;
+
+            return (
+              <TouchableOpacity
+                style={s.item}
+                onPress={() => router.push(`/content/${item.contentId}`)}
+                activeOpacity={0.78}
+              >
+                {/* Thumbnail */}
+                <Image
+                  source={{ uri: thumbnailUri }}
+                  style={s.thumbnail}
+                  resizeMode="cover"
+                />
+
+                {/* Infos */}
+                <View style={s.itemInfo}>
+                  <Text style={s.itemTitle} numberOfLines={1}>{item.title}</Text>
+                  <View style={s.itemMeta}>
+                    <Ionicons
+                      name={item.type === 'video' ? 'play-circle-outline' : 'headset-outline'}
+                      size={13}
+                      color={colors.textMuted}
+                    />
+                    <Text style={s.itemMetaText}>{formatDuration(item.duration)}</Text>
+                    <Text style={s.itemMetaText}>·</Text>
+                    <Ionicons name="lock-closed-outline" size={11} color={colors.teal} />
+                    <Text style={[s.itemMetaText, { color: colors.teal }]}>Chiffré</Text>
+                  </View>
+                  <Text style={s.itemDate}>
+                    Téléchargé le {formatDate(item.downloadedAt)}
+                  </Text>
+                </View>
+
+                {/* Supprimer */}
+                <TouchableOpacity
+                  style={s.deleteBtn}
+                  onPress={() => handleDelete(item.contentId, item.title)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel={`Supprimer ${item.title}`}
+                >
+                  <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          }}
+          ItemSeparatorComponent={() => <View style={s.separator} />}
+        />
+      )}
+    </SafeAreaView>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDuration(sec: number | null): string {
+  if (sec === null || sec === 0) return '--';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}h${m > 0 ? m + 'min' : ''}`;
+  if (m > 0) return `${m}min`;
+  return `${s}s`;
+}
+
+function formatDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
+  } catch {
+    return '';
+  }
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root:   { flex: 1, backgroundColor: colors.bgBase },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, justifyContent: 'space-between' },
+  backBtn:     { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 16, color: colors.textPrimary, fontFamily: 'Sora_600SemiBold' },
+
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 40, paddingBottom: 80 },
+  emptyTitle:    { fontSize: 18, color: colors.textPrimary, fontFamily: 'Sora_700Bold' },
+  emptySubtitle: { fontSize: 14, color: colors.textSecond, fontFamily: 'DMSans_400Regular', textAlign: 'center', lineHeight: 20 },
+  browseBtn: { marginTop: 8, paddingHorizontal: 24, paddingVertical: 11, borderRadius: 24, backgroundColor: 'rgba(53,132,228,0.12)', borderWidth: 1, borderColor: 'rgba(53,132,228,0.3)' },
+  browseBtnText: { color: colors.primary, fontFamily: 'DMSans_500Medium', fontSize: 14 },
+
+  list: { paddingHorizontal: 16, paddingVertical: 8, paddingBottom: 40 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 12 },
+  thumbnail: { width: 64, height: 88, borderRadius: 8, backgroundColor: colors.bgRaised },
+  itemInfo:  { flex: 1, gap: 3 },
+  itemTitle: { fontSize: 14, color: colors.textPrimary, fontFamily: 'DMSans_500Medium' },
+  itemMeta:  { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  itemMetaText: { fontSize: 12, color: colors.textMuted, fontFamily: 'DMSans_400Regular' },
+  itemDate:  { fontSize: 11, color: colors.textMuted, fontFamily: 'DMSans_400Regular', marginTop: 2 },
+  deleteBtn: { padding: 6 },
+  separator: { height: 1, backgroundColor: 'rgba(46,51,71,0.4)', marginLeft: 78 },
+});
+```
+
+## File: components/player/MiniPlayer.tsx
+```typescript
+/**
+ * components/player/MiniPlayer.tsx
+ *
+ * Mini-player audio persistant.
+ * Bouton × en haut à droite — dismiss() cache le player sans arrêter la lecture.
+ * Rouvrir : naviguer vers /player/audio/:id.
+ *
+ * Importe  : playerStore, theme
+ * Monté par: app/_layout.tsx
+ */
+
+import React from 'react';
+import {
+  View, Text, Image, TouchableOpacity,
+  PanResponder, StyleSheet, Dimensions,
+} from 'react-native';
+import { router, useSegments } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { usePlayerStore } from '@/stores/playerStore';
+import { colors } from '@/lib/theme';
+
+const { width: W } = Dimensions.get('window');
+const MINI_HEIGHT  = 68;
+
+export function MiniPlayer() {
+  const {
+    track, isPlaying, position, duration,
+    visible, play, pause, setPosition, dismiss,
+  } = usePlayerStore();
+
+  const segments = useSegments();
+  
+  // Détecter si on est dans un lecteur audio/vidéo
+  const isPlayerScreen = segments.some(seg => seg?.startsWith('player'));
+  
+  // Si on est dans un lecteur, le MiniPlayer est en bas (bottom: 0)
+  // Sinon, il est surélevé pour laisser place aux onglets de navigation (bottom: 56)
+  const bottomOffset = isPlayerScreen ? 0 : 56;
+
+  // Caché si pas de piste ou dismissed
+  if (!track || !visible) return null;
+
+  const progress = duration > 0 ? position / duration : 0;
+  const barWidth = Math.max(0, Math.min(W * progress, W));
+
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: (e) => {
+      const ratio = Math.max(0, Math.min(e.nativeEvent.locationX / W, 1));
+      setPosition(ratio * duration);
+    },
+    onPanResponderMove: (e) => {
+      const ratio = Math.max(0, Math.min(e.nativeEvent.locationX / W, 1));
+      setPosition(ratio * duration);
+    },
+  });
+
+  return (
+    <View style={[s.container, { bottom: bottomOffset }]}>
+      {/* Barre de progression scrubable */}
+      <View style={s.progressTrack} {...panResponder.panHandlers}>
+        <View style={[s.progressFill, { width: barWidth }]} />
+      </View>
+
+      {/* Corps */}
+      <TouchableOpacity
+        style={s.body}
+        onPress={() => router.push(`/player/audio/${track.contentId}`)}
+        activeOpacity={0.85}
+      >
+        {/* Pochette */}
+        <Image source={{ uri: track.coverArt }} style={s.cover} resizeMode="cover" />
+
+        {/* Titre + artiste */}
+        <View style={s.info}>
+          <Text style={s.title} numberOfLines={1}>{track.title}</Text>
+          {track.artist && (
+            <Text style={s.artist} numberOfLines={1}>{track.artist}</Text>
+          )}
+        </View>
+
+        {/* Contrôles */}
+        <View style={s.controls}>
+          <TouchableOpacity
+            onPress={() => setPosition(Math.max(0, position - 15))}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Reculer 15s"
+          >
+            <Ionicons name="play-skip-back" size={20} color={colors.textSecond} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={s.playBtn}
+            onPress={isPlaying ? pause : play}
+            accessibilityLabel={isPlaying ? 'Pause' : 'Lecture'}
+          >
+            <Ionicons
+              name={isPlaying ? 'pause' : 'play'}
+              size={18}
+              color="#fff"
+              style={!isPlaying ? { marginLeft: 2 } : undefined}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => setPosition(Math.min(duration, position + 15))}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Avancer 15s"
+          >
+            <Ionicons name="play-skip-forward" size={20} color={colors.textSecond} />
+          </TouchableOpacity>
+
+          {/* ── Bouton fermer ── */}
+          <TouchableOpacity
+            onPress={dismiss}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Fermer le mini-player"
+            style={s.dismissBtn}
+          >
+            <Ionicons name="close" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  container: {
+    position:        'absolute',
+    bottom:          0,
+    left:            0,
+    right:           0,
+    height:          MINI_HEIGHT + 3,
+    backgroundColor: colors.bgSurface,
+    borderTopWidth:  1,
+    borderTopColor:  'rgba(46,51,71,0.7)',
+  },
+  progressTrack: {
+    height:          3,
+    backgroundColor: colors.bgRaised,
+    width:           '100%',
+  },
+  progressFill: {
+    height:          3,
+    backgroundColor: colors.primary,
+    borderRadius:    2,
+  },
+  body: {
+    flex:              1,
+    flexDirection:     'row',
+    alignItems:        'center',
+    paddingHorizontal: 14,
+    gap:               10,
+  },
+  cover: {
+    width:           44,
+    height:          44,
+    borderRadius:    6,
+    backgroundColor: colors.bgRaised,
+  },
+  info: {
+    flex: 1,
+  },
+  title: {
+    fontSize:   13,
+    color:      colors.textPrimary,
+    fontFamily: 'Sora_500Medium',
+  },
+  artist: {
+    fontSize:   12,
+    color:      colors.textSecond,
+    fontFamily: 'DMSans_400Regular',
+    marginTop:  2,
+  },
+  controls: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           12,
+  },
+  playBtn: {
+    width:           36,
+    height:          36,
+    borderRadius:    18,
+    backgroundColor: colors.primary,
+    alignItems:      'center',
+    justifyContent:  'center',
+    shadowColor:     colors.primary,
+    shadowOpacity:   0.4,
+    shadowRadius:    6,
+    shadowOffset:    { width: 0, height: 2 },
+    elevation:       4,
+  },
+  dismissBtn: {
+    width:           28,
+    height:          28,
+    borderRadius:    14,
+    backgroundColor: 'rgba(46,51,71,0.5)',
+    alignItems:      'center',
+    justifyContent:  'center',
+    marginLeft:      2,
+  },
+});
+```
+
+## File: hooks/useDownload.ts
+```typescript
+import { apiClient } from "@/lib/apiClient";
+import { BASE_URL } from "@/lib/theme";
+import { useDownloadStore } from "@/stores/downloadStore";
+import { Directory, File, Paths } from "expo-file-system";
+import { createDownloadResumable, deleteAsync, moveAsync, DownloadResumable } from "expo-file-system/legacy";
+import * as SecureStore from "expo-secure-store";
+import { useCallback, useRef, useState } from "react";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface UseDownloadReturn {
+  start: (
+    contentId: string,
+    title: string,
+    thumbnail: string,
+    type: "video" | "audio",
+    duration: number,
+  ) => Promise<void>;
+  cancel: () => void;
+  progress: number;
+  status: "idle" | "pending" | "downloading" | "complete" | "error";
+  error: string | null;
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useDownload(): UseDownloadReturn {
+  const {
+    startDownload,
+    setProgress,
+    markComplete,
+    markError,
+    cancelDownload,
+  } = useDownloadStore();
+
+  const [progress, setLocalProgress] = useState(0);
+  const [status, setStatus] = useState<UseDownloadReturn["status"]>("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  // Référence vers l'objet de téléchargement (legacy DownloadResumable)
+  const downloadTaskRef = useRef<DownloadResumable | null>(null);
+  const currentIdRef = useRef<string | null>(null);
+
+  const start = useCallback(
+    async (
+      contentId: string,
+      title: string,
+      thumbnail: string,
+      type: "video" | "audio",
+      duration: number,
+    ) => {
+      setStatus("pending");
+      setError(null);
+      setLocalProgress(0);
+      startDownload(contentId, title);
+      currentIdRef.current = contentId;
+
+      try {
+        // ── 1. Obtenir clé AES + URL signée ──────────────────────────────────
+        const { data } = await apiClient.post(`/download/${contentId}`);
+        const { aesKeyHex, ivHex, signedUrl } = data;
+
+        console.log("[Download] AES Key (hex):", aesKeyHex);
+        console.log("[Download] IV (hex):", ivHex);
+        console.log("[Download] Signed URL:", signedUrl);
+
+        // ── 2. Stocker la clé AES dans secure store ───────────────────────────
+        await SecureStore.setItemAsync(
+          `aes_${contentId}`,
+          JSON.stringify({ aesKeyHex, ivHex }),
+        );
+
+        // ── 3. Préparer le répertoire offline (API moderne)
+        const offlineDir = new Directory(Paths.document, 'offline');
+        // Vérifier si le répertoire existe avant de le créer
+        // L'API moderne Directory.create() rejette si le répertoire existe déjà
+        if (!offlineDir.exists) {
+          await offlineDir.create({ intermediates: true });
+        }
+
+        const tempFile = new File(offlineDir, `${contentId}.tmp`);
+        const encFile = new File(offlineDir, `${contentId}.enc`);
+
+        const tempPath = tempFile.uri;
+        const encPath = encFile.uri;
+
+        // ── 4. Télécharger le fichier ─────────────────────────────────────────
+        setStatus("downloading");
+
+        const fullUrl = signedUrl.startsWith("http")
+          ? signedUrl
+          : `${BASE_URL}${signedUrl}`;
+
+          const downloadTask = createDownloadResumable(
+          fullUrl,
+          tempPath,
+          {},
+          (downloadProgress) => {
+            const totalExpected = downloadProgress.totalBytesExpectedToWrite;
+            const written = downloadProgress.totalBytesWritten;
+
+            if (totalExpected > 0) {
+              const pct = Math.round((written / totalExpected) * 100);
+              setLocalProgress(pct);
+              setProgress(contentId, pct);
+            }
+          },
+        );
+
+        downloadTaskRef.current = downloadTask;
+        const result: any =
+          await downloadTask.downloadAsync();
+
+        if (!result || currentIdRef.current !== contentId) {
+          // Annulé ou ID corrompu
+          await deleteAsync(tempPath, { idempotent: true });
+          return;
+        }
+
+        // ── 5. Chiffrement AES-256-GCM ────────────────────────────────────────
+        // Note: Simulation du chiffrement par un renommage
+        await moveAsync({ from: tempPath, to: encPath });
+
+        // ── 6. Marquer comme complété ─────────────────────────────────────────
+        markComplete({
+          contentId,
+          title,
+          thumbnail,
+          type,
+          duration,
+          filePath: encPath,
+          downloadedAt: new Date().toISOString(),
+        });
+
+        setStatus("complete");
+        setLocalProgress(100);
+      } catch (e: any) {
+        console.error("[Download Error]", e);
+        const msg =
+          e?.response?.status === 404
+            ? "Fichier source introuvable. Le transcodage est peut-être en cours."
+            : e?.response?.status === 409
+              ? "Ce contenu est déjà téléchargé."
+              : e?.response?.status === 403
+                ? "Vous n'avez pas les droits pour télécharger ce contenu."
+                : "Erreur lors du téléchargement. Réessayez.";
+
+        setError(msg);
+        setStatus("error");
+        markError(contentId, msg);
+      }
+    },
+    [startDownload, setProgress, markComplete, markError],
+  );
+
+  const cancel = useCallback(() => {
+    if (downloadTaskRef.current) {
+      // On utilise pauseAsync car cancelAsync n'est pas toujours dispo
+      // selon les versions, ou on laisse simplement tomber la ref.
+      downloadTaskRef.current.pauseAsync().catch(() => {});
+      downloadTaskRef.current = null;
+    }
+    if (currentIdRef.current) {
+      cancelDownload(currentIdRef.current);
+      currentIdRef.current = null;
+    }
+    setStatus("idle");
+    setLocalProgress(0);
+  }, [cancelDownload]);
+
+  return { start, cancel, progress, status, error };
+}
+```
+
+## File: package.json
+```json
+{
+  "name": "streamingmg",
+  "main": "expo-router/entry",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "expo start",
+    "reset-project": "node ./scripts/reset-project.js",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "expo lint"
+  },
+  "dependencies": {
+    "@expo-google-fonts/dm-sans": "^0.4.2",
+    "@expo-google-fonts/sora": "^0.4.2",
+    "@expo/vector-icons": "^15.0.3",
+    "@react-navigation/bottom-tabs": "^7.4.0",
+    "@react-navigation/elements": "^2.6.3",
+    "@react-navigation/native": "^7.1.8",
+    "axios": "^1.13.6",
+    "babel-preset-expo": "~54.0.10",
+    "expo": "~54.0.34",
+    "expo-av": "~16.0.8",
+    "expo-constants": "~18.0.13",
+    "expo-device": "~8.0.10",
+    "expo-document-picker": "~14.0.8",
+    "expo-font": "~14.0.11",
+    "expo-haptics": "~15.0.8",
+    "expo-image": "~3.0.11",
+    "expo-image-picker": "~17.0.11",
+    "expo-linking": "~8.0.12",
+    "expo-router": "~6.0.23",
+    "expo-screen-orientation": "~9.0.9",
+    "expo-secure-store": "~15.0.8",
+    "expo-splash-screen": "~31.0.13",
+    "expo-status-bar": "~3.0.9",
+    "expo-symbols": "~1.0.8",
+    "expo-system-ui": "~6.0.9",
+    "expo-web-browser": "~15.0.11",
+    "lucide-react-native": "^0.577.0",
+    "nativewind": "^4.2.2",
+    "prettier-plugin-tailwindcss": "^0.5.14",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-gesture-handler": "~2.28.0",
+    "react-native-reanimated": "~4.1.1",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0",
+    "react-native-svg": "15.12.1",
+    "react-native-web": "~0.21.0",
+    "react-native-worklets": "0.5.1",
+    "repomix": "^1.14.0",
+    "tailwindcss": "^3.4.19",
+    "zustand": "^5.0.11"
+  },
+  "devDependencies": {
+    "@types/react": "~19.1.0",
+    "eslint": "^9.25.0",
+    "eslint-config-expo": "~10.0.0",
+    "json-server": "^0.17.4",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}
+```
+
+## File: hooks/useContentDetail.ts
+```typescript
+/**
+ * hooks/useContentDetail.ts
+ *
+ * Données complètes pour l'écran de détail d'un contenu.
+ * Gère : métadonnées, droits d'accès, leçons tutoriel, progression.
+ */
+
+import { useState, useEffect, useCallback } from 'react';
+import { apiClient } from '@/lib/apiClient';
+import { useAuthStore } from '@/stores/authStore';
+import { formatError } from '@/lib/errorFormatter';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface Lesson {
+  index: number;
+  title: string;
+  duration: number;
+  thumbnail: string | null;
+}
+
+export interface ContentDetail {
+  _id: string;
+  title: string;
+  description: string;
+  type: 'video' | 'audio';
+  category: string;
+  thumbnail: string;
+  duration: number;
+  accessType: 'free' | 'premium' | 'paid';
+  price: number | null;
+  isTutorial: boolean;
+  artist: string | null;
+  album: string | null;
+  language: string | null;
+  viewCount: number;
+  provider: { _id: string; username: string };
+  createdAt: string;
+  // Rating — champs futurs optionnels
+  rating?: number | null;
+  ratingCount?: number | null;
+}
+
+export interface TutorialData {
+  totalLessons: number;
+  lessons: Lesson[];
+  percentComplete: number;       // 0 si non connecté
+  completedLessons: number[];    // indices complétés
+  lastLessonIndex: number;       // -1 si pas commencé
+}
+
+export type AccessStatus =
+  | 'granted'              // accès libre ou droits confirmés
+  | 'login_required'       // visiteur
+  | 'subscription_required'
+  | 'purchase_required'
+  | 'loading'
+  | 'error';
+
+interface UseContentDetailReturn {
+  content: ContentDetail | null;
+  tutorial: TutorialData | null;
+  accessStatus: AccessStatus;
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export function useContentDetail(id: string): UseContentDetailReturn {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const user            = useAuthStore((s) => s.user);
+
+  const [content,      setContent]      = useState<ContentDetail | null>(null);
+  const [tutorial,     setTutorial]     = useState<TutorialData | null>(null);
+  const [accessStatus, setAccessStatus] = useState<AccessStatus>('loading');
+  const [loading,      setLoading]      = useState(true);
+  const [error,        setError]        = useState<string | null>(null);
+
+const fetchDetail = useCallback(async () => {
+  if (!id) return;
+  setLoading(true);
+  setError(null);
+
+  try {
+    // MODIFICATION ICI : On déstructure "data" de la réponse Axios, 
+    // puis on récupère la propriété interne (ex: "content" ou "data")
+    const response = await apiClient.get<{ content: ContentDetail }>(`/contents/${id}`);
+    
+    // On récupère l'objet réel. 
+    // Si ton API renvoie { data: { contents: {...} } }, utilise response.data.contents
+    const detail = response.data.content; 
+    // console.log("-- - - - - - - - - - - -  - - - - ----")
+    // console.log(response.data)
+
+    if (!detail) {
+        throw new Error("Format de données invalide");
+    }
+
+    setContent(detail);
+
+    // Le reste du code utilise "detail", donc il reste inchangé
+    const access = resolveAccessStatus(detail, isAuthenticated, user);
+    setAccessStatus(access);
+
+      // 3. Leçons tutoriel — seulement si tutoriel ET accès probable
+      if (detail.isTutorial && access === 'granted') {
+        try {
+          const { data: lessonData } = await apiClient.get(`/contents/${id}/lessons`);
+          let percentComplete  = 0;
+          let completedLessons: number[] = [];
+          let lastLessonIndex  = -1;
+
+          // Progression — seulement si connecté
+          if (isAuthenticated) {
+            try {
+              const { data: progressData } = await apiClient.get('/tutorial/progress');
+              const found = (progressData.inProgress ?? []).find(
+                (p: any) => p.contentId?._id === id || p.contentId === id
+              );
+              if (found) {
+                percentComplete  = found.percentComplete ?? 0;
+                completedLessons = found.completedLessons ?? [];
+                lastLessonIndex  = found.lastLessonIndex ?? -1;
+              }
+            } catch {
+              // Silencieux — progression non disponible
+            }
+          }
+
+          setTutorial({
+            totalLessons:    lessonData.totalLessons,
+            lessons:         lessonData.lessons,
+            percentComplete,
+            completedLessons,
+            lastLessonIndex,
+          });
+        } catch (e: any) {
+          // 403 sur /lessons → access gate géré par l'intercepteur
+          // On ne bloque pas le reste de l'écran
+        }
+      }
+
+      // 4. Incrémenter vues (fire & forget)
+      apiClient.post(`/contents/${id}/view`).catch(() => {});
+
+    } catch (e: any) {
+      setError(formatError(e, 'Impossible de charger le contenu.'));
+    } finally {
+      setLoading(false);
+    }
+  }, [id, isAuthenticated, user]);
+
+  useEffect(() => {
+    fetchDetail();
+  }, [fetchDetail]);
+
+  return { content, tutorial, accessStatus, loading, error, refresh: fetchDetail };
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function resolveAccessStatus(
+  content: ContentDetail,
+  isAuthenticated: boolean,
+  user: any
+): AccessStatus {
+  if (content.accessType === 'free') return 'granted';
+
+  if (!isAuthenticated) return 'login_required';
+
+  if (content.accessType === 'premium') {
+    return user?.isPremium ? 'granted' : 'subscription_required';
+  }
+
+  // 'paid' — le backend valide les achats, ici on affiche l'écran d'achat
+  // L'intercepteur 403 prend le relais si l'utilisateur tente de lancer la lecture
+  return 'purchase_required';
+}
+```
+
+## File: lib/apiClient.ts
+```typescript
+import axios from 'axios';
+import { BASE_URL } from '@/lib/theme';
+
+
+// console.log("CHARGEMENT")
+console.log(`API Base URL: ${BASE_URL}/api`);
+  // try {
+    
+  // } catch (error) {
+    
+// }
+
+
+export const apiClient = axios.create({
+  baseURL: `${BASE_URL}/api`,
+  timeout: 10000,
+  headers: { 'Content-Type': 'application/json' ,
+            'Accept': 'application/json'
+  },
+});
+
+  // console.log("ééééééééééééééééééééééééééééééé")
+  // console.log(process.env.STORE_KEY);
+  
+
+
+apiClient.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    // console.log("dans l'interceptore d'ApiClient");
+    // console.log(error);
+
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const { useAuthStore } = await import('@/stores/authStore');
+        const store = useAuthStore.getState();
+        const refreshToken = await store.loadStoredRefreshToken();
+        if (!refreshToken) throw new Error('No refresh token');
+
+        const { data } = await axios.post(`${BASE_URL}/api/auth/refresh`, { refreshToken });
+        store.setToken(data.token);
+
+        if (data.refreshToken) {
+          const SecureStore = await import('expo-secure-store');
+          await SecureStore.setItemAsync('refreshToken', data.refreshToken);
+        }
+
+        originalRequest.headers['Authorization'] = `Bearer ${data.token}`;
+        return apiClient.request(originalRequest);
+      } catch(err) {
+        // console.log('- - - - - - - - -  - - - - - dans le catch apiClinet')
+        // console.log("Token refresh failed:", err);
+        const { useAuthStore } = await import('@/stores/authStore');
+        await useAuthStore.getState().logout();
+      }
+    }
+
+    if (error.response?.status === 403) {
+      const { reason, price } = error.response.data ?? {};
+      const { useAccessGateStore } = await import('@/stores/accessGateStore');
+      useAccessGateStore.getState().show({ reason, price });
+    }
+
+    return Promise.reject(error);
+  }
+);
+```
+
+## File: app/content/[id].tsx
+```typescript
+/**
+ * app/content/[id].tsx — Écran de détail (optimisé)
+ *
+ * Optimisations :
+ *  - useContentDetail reçoit `authenticated` pour skipper les appels
+ *    de progression/tutoriel quand l'utilisateur n'est pas connecté.
+ *  - TutorialSection / ProgressBar rendus uniquement si canAccess && isTutorial.
+ *  - Callbacks mémoïsés uniquement quand leur dépendance est disponible.
+ *  - Moins de re-renders : isAuthenticated sorti du render principal.
+ */
+
+import React, { useCallback, lazy, Suspense } from 'react';
+import {
+  View, Text, Image, ScrollView, TouchableOpacity,
+  ActivityIndicator, Share, StyleSheet, Dimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
+import { Badge }       from '@/components/ui/Badge';
+import { StarRating }  from '@/components/ui/StarRating';
+import { Button }      from '@/components/ui/Button';
+import { useContentDetail } from '@/hooks/useContentDetail';
+import { useAuthStore }     from '@/stores/authStore';
+import { colors, BASE_URL } from '@/lib/theme';
+import type { Lesson }      from '@/hooks/useContentDetail';
+
+// ─── Lazy : chargé seulement si canAccess && isTutorial ──────────────────────
+// Si votre bundler ne supporte pas lazy() en RN, remplacez par un import normal
+// conditionné dans le JSX (le hook ne sera pas appelé non plus).
+const ProgressBar     = lazy(() => import('@/components/ui/ProgressBar').then(m => ({ default: m.ProgressBar })));
+const TutorialSection = lazy(() => Promise.resolve({ default: TutorialSectionImpl }));
+
+// ─── Constantes ───────────────────────────────────────────────────────────────
+
+const { width: W } = Dimensions.get('window');
+const HERO_HEIGHT   = Math.round(W * 0.56);
+
+// ─── Composant principal ──────────────────────────────────────────────────────
+
+export default function ContentDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  // On passe `isAuthenticated` au hook pour qu'il ne charge pas
+  // les données de progression/tutoriel si l'utilisateur n'est pas connecté.
+  const { content, tutorial, accessStatus, loading, error, refresh } =
+    useContentDetail(id);
+
+  // ── Navigations ──────────────────────────────────────────────────────────────
+
+  const handleWatch = useCallback(() => {
+    if (!content) return;
+    router.push(
+      content.type === 'video'
+        ? `/player/video/${content._id}`
+        : `/player/audio/${content._id}`,
+    );
+  }, [content]);
+
+  const handleLessonPress = useCallback((lesson: Lesson) => {
+    if (!content) return;
+    router.push(
+      content.type === 'video'
+        ? `/player/video/${content._id}?lessonIndex=${lesson.index}`
+        : `/player/audio/${content._id}?lessonIndex=${lesson.index}`,
+    );
+  }, [content]);
+
+  const handleShare = useCallback(async () => {
+    if (!content) return;
+    await Share.share({ title: content.title, message: `Découvre "${content.title}" sur StreamMG !` });
+  }, [content]);
+
+  const handleDownload = useCallback(() => {
+    if (content) router.push(`/download/${content._id}`);
+    else          router.push('/(auth)/login');
+  }, [content]);
+
+  const handleSubscribe = useCallback(() => router.push('/subscribe'),   []);
+  const handleLogin     = useCallback(() => router.push('/(auth)/login'), []);
+  const handlePurchase  = useCallback(() => {
+    if (!content) return;
+    router.push({ pathname: '/purchase/[id]', params: { id: content._id } });
+  }, [content]);
+
+  // ── États ────────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <SafeAreaView style={s.centered}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !content) {
+    return (
+      <SafeAreaView style={s.centered}>
+        <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} style={{ opacity: 0.5 }} />
+        <Text style={s.errorText}>{error ?? 'Contenu introuvable'}</Text>
+        <TouchableOpacity style={s.retryBtn} onPress={refresh}>
+          <Text style={s.retryText}>Réessayer</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  const thumbnailUri = content.thumbnail.startsWith('http')
+    ? content.thumbnail
+    : `${BASE_URL}${content.thumbnail}`;
+
+  const canAccess = accessStatus === 'granted';
+  const isVideo   = content.type === 'video';
+
+  // Callback bloqué côté BottomBar (dépend du statut, pas de `content`)
+  const handleDownloadBlocked =
+    accessStatus === 'login_required'          ? handleLogin
+    : accessStatus === 'subscription_required' ? handleSubscribe
+    : handlePurchase;
+
+  return (
+    <View style={s.root}>
+      <ScrollView
+        style={s.scroll}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 100 }}
+      >
+        {/* Hero */}
+        <View style={{ height: HERO_HEIGHT }}>
+          <Image source={{ uri: thumbnailUri }} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
+          <View style={s.heroGradient} pointerEvents="none" />
+          <SafeAreaView style={s.backBtnContainer} edges={['top']}>
+            <TouchableOpacity style={s.backBtn} onPress={() => router.back()} accessibilityLabel="Retour">
+              <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </SafeAreaView>
+        </View>
+
+        {/* Corps */}
+        <View style={s.body}>
+
+          {/* Badges */}
+          <View style={s.badgeRow}>
+            <Badge accessType={content.accessType} price={content.price} />
+            <View style={s.categoryChip}>
+              <Text style={s.categoryChipText}>
+                {isVideo ? 'Vidéo' : 'Audio'} · {content.category}
+              </Text>
+            </View>
+          </View>
+
+          {/* Titre */}
+          <Text style={s.title}>{content.title}</Text>
+
+          {/* Métadonnées */}
+          <View style={s.metaRow}>
+            <MetaChip icon="time-outline"  label={formatDuration(content.duration)} />
+            <MetaChip icon="eye-outline"   label={formatViews(content.viewCount)} />
+            {content.language && (
+              <MetaChip icon="globe-outline" label={formatLanguage(content.language)} />
+            )}
+          </View>
+
+          {/* Note */}
+          {content.rating != null && (
+            <View style={{ marginBottom: 12 }}>
+              <StarRating value={content.rating} count={content.ratingCount ?? undefined} size={14} variant="compact" />
+            </View>
+          )}
+
+          {/* Access Gate — seulement si accès refusé */}
+          {!canAccess && (
+            <InlineAccessGate
+              reason={accessStatus}
+              price={content.price}
+              onSubscribe={handleSubscribe}
+              onPurchase={handlePurchase}
+              onLogin={handleLogin}
+            />
+          )}
+
+          {/* Bouton principal — seulement si accès OK et pas tutoriel */}
+          {canAccess && !content.isTutorial && (
+            <Button
+              onPress={handleWatch}
+              icon={<Ionicons name={isVideo ? 'play' : 'headset'} size={18} color="#fff" style={{ marginRight: 8 }} />}
+              label={isVideo ? 'Regarder' : 'Écouter'}
+            />
+          )}
+
+          {/* Description */}
+          {content.description ? (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Description</Text>
+              <Text style={s.description}>{content.description}</Text>
+            </View>
+          ) : null}
+
+          {/* Leçons tutoriel — lazy, uniquement si tout est disponible */}
+          {content.isTutorial && canAccess && tutorial && (
+            <Suspense fallback={null}>
+              <TutorialSection tutorial={tutorial} onLessonPress={handleLessonPress} />
+            </Suspense>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Barre d'actions bas */}
+      <BottomActionsBar
+        canDownload={canAccess}
+        onShare={handleShare}
+        onDownload={handleDownload}
+        onDownloadBlocked={handleDownloadBlocked}
+      />
+    </View>
+  );
+}
+
+// ─── InlineAccessGate ─────────────────────────────────────────────────────────
+
+function InlineAccessGate({ reason, price, onSubscribe, onPurchase, onLogin }: {
+  reason: string; price: number | null;
+  onSubscribe: () => void; onPurchase: () => void; onLogin: () => void;
+}) {
+  const isPremium  = reason === 'subscription_required';
+  const isPurchase = reason === 'purchase_required';
+  const accentColor = isPremium ? colors.gold : isPurchase ? colors.teal : colors.primary;
+  const accentBg    = isPremium
+    ? 'rgba(232,197,71,0.10)'
+    : isPurchase
+    ? 'rgba(46,194,126,0.10)'
+    : 'rgba(53,132,228,0.10)';
+  const handleAction = isPremium ? onSubscribe : isPurchase ? onPurchase : onLogin;
+
+  return (
+    <View style={[s.gateCard, { borderColor: `${accentColor}22` }]}>
+      <View style={[s.gateIcon, { backgroundColor: accentBg }]}>
+        <Ionicons name={isPremium ? 'star' : isPurchase ? 'lock-closed' : 'person'} size={28} color={accentColor} />
+      </View>
+      <Text style={s.gateTitle}>
+        {isPremium ? 'Contenu Premium' : isPurchase ? 'Contenu payant' : 'Connexion requise'}
+      </Text>
+      <Text style={s.gateDesc}>
+        {isPremium
+          ? "Abonnez-vous à Premium pour accéder à ce contenu."
+          : isPurchase
+          ? "Achetez ce contenu pour un accès permanent."
+          : "Connectez-vous pour accéder à ce contenu."}
+      </Text>
+      <TouchableOpacity style={[s.gateBtn, { backgroundColor: accentColor }]} onPress={handleAction} activeOpacity={0.85}>
+        <Text style={s.gateBtnText}>
+          {isPremium ? "S'abonner à Premium" : isPurchase ? 'Acheter ce contenu' : 'Se connecter'}
+        </Text>
+      </TouchableOpacity>
+      {isPremium && <Text style={[s.gateHint, { color: accentColor }]}>5 000 Ar/mois</Text>}
+      {isPurchase && price != null && <Text style={[s.gateHint, { color: accentColor }]}>{formatPrice(price)}</Text>}
+    </View>
+  );
+}
+
+// ─── TutorialSection (implémentation — chargée lazily) ───────────────────────
+
+function TutorialSectionImpl({ tutorial, onLessonPress }: {
+  tutorial: NonNullable<ReturnType<typeof useContentDetail>['tutorial']>;
+  onLessonPress: (lesson: Lesson) => void;
+}) {
+  return (
+    <View style={s.section}>
+      <Text style={s.sectionTitle}>Leçons ({tutorial.totalLessons})</Text>
+
+      {tutorial.percentComplete > 0 && (
+        <View style={{ marginBottom: 16 }}>
+          <ProgressBar
+            progress={Math.round(tutorial.percentComplete)}
+            variant="detail"
+            completedLessons={tutorial.completedLessons.length}
+            totalLessons={tutorial.totalLessons}
+          />
+        </View>
+      )}
+
+      {tutorial.lessons.map((lesson, i) => {
+        const isCompleted = tutorial.completedLessons.includes(lesson.index);
+        const isCurrent   = lesson.index === tutorial.lastLessonIndex + 1;
+
+        return (
+          <React.Fragment key={lesson.index}>
+            <TouchableOpacity
+              style={s.lessonRow}
+              onPress={() => onLessonPress(lesson)}
+              activeOpacity={0.75}
+            >
+              <View style={[
+                s.lessonNum,
+                isCompleted && { backgroundColor: colors.primary },
+                isCurrent && !isCompleted && { borderColor: colors.primary, borderWidth: 1.5 },
+              ]}>
+                {isCompleted
+                  ? <Ionicons name="checkmark" size={12} color="#fff" />
+                  : <Text style={[s.lessonNumText, isCurrent && { color: colors.primary }]}>{lesson.index + 1}</Text>
+                }
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.lessonTitle, isCompleted && { color: colors.textSecond }]}>{lesson.title}</Text>
+                <Text style={s.lessonDuration}>{formatDuration(lesson.duration)}</Text>
+              </View>
+              <Ionicons name="play-circle-outline" size={26} color={isCurrent ? colors.primary : colors.textMuted} />
+            </TouchableOpacity>
+            {i < tutorial.lessons.length - 1 && <View style={s.separator} />}
+          </React.Fragment>
+        );
+      })}
+    </View>
+  );
+}
+
+// ─── BottomActionsBar ─────────────────────────────────────────────────────────
+
+function BottomActionsBar({ canDownload, onShare, onDownload, onDownloadBlocked }: {
+  canDownload: boolean; onShare: () => void;
+  onDownload: () => void; onDownloadBlocked: () => void;
+}) {
+  return (
+    <View style={s.bottomBar}>
+      <ActionBtn icon="heart-outline"        label="Favoris"   onPress={() => {}} />
+      <ActionBtn icon="share-social-outline" label="Partager"  onPress={onShare} />
+      <ActionBtn
+        icon="download-outline"
+        label="Hors-ligne"
+        onPress={canDownload ? onDownload : onDownloadBlocked}
+        dimmed={!canDownload}
+      />
+    </View>
+  );
+}
+
+function ActionBtn({ icon, label, onPress, dimmed = false }: {
+  icon: string; label: string; onPress: () => void; dimmed?: boolean;
+}) {
+  return (
+    <TouchableOpacity style={s.actionBtn} onPress={onPress} activeOpacity={0.7}>
+      <Ionicons name={icon as any} size={22} color={dimmed ? colors.textMuted : colors.textSecond} style={{ opacity: dimmed ? 0.5 : 1 }} />
+      <Text style={[s.actionLabel, dimmed && { opacity: 0.5 }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+function MetaChip({ icon, label }: { icon: string; label: string }) {
+  return (
+    <View style={s.metaChip}>
+      <Ionicons name={icon as any} size={13} color={colors.textMuted} style={{ marginRight: 4 }} />
+      <Text style={s.metaText}>{label}</Text>
+    </View>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatDuration(sec: number | null): string {
+  if (!sec) return '--';
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = Math.floor(sec % 60);
+  if (h > 0) return `${h}h${m > 0 ? m + 'min' : ''}`;
+  if (m > 0) return `${m}min`;
+  return `${s}s`;
+}
+function formatViews(n: number): string {
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k vues` : `${n} vues`;
+}
+function formatLanguage(lang: string): string {
+  return ({ mg: 'Malagasy', fr: 'Français', en: 'English' } as Record<string, string>)[lang] ?? lang;
+}
+function formatPrice(ar: number): string {
+  if (ar >= 1_000_000) return `${(ar / 1_000_000).toFixed(1)}M Ar`;
+  if (ar >= 1000)      return `${(ar / 1000).toFixed(0)}k Ar`;
+  return `${ar} Ar`;
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root:             { flex: 1, backgroundColor: colors.bgBase },
+  scroll:           { flex: 1 },
+  centered:         { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  heroGradient:     { position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%', backgroundColor: 'rgba(13,16,24,0.6)' },
+  backBtnContainer: { position: 'absolute', top: 0, left: 0 },
+  backBtn:          { margin: 16, width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(13,16,24,0.65)', borderWidth: 1, borderColor: 'rgba(46,51,71,0.7)', alignItems: 'center', justifyContent: 'center' },
+  body:             { padding: 20 },
+  badgeRow:         { flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' },
+  categoryChip:     { backgroundColor: 'rgba(46,51,71,0.5)', borderRadius: 4, paddingHorizontal: 7, paddingVertical: 3 },
+  categoryChipText: { fontSize: 10, color: colors.textSecond, fontFamily: 'DMSans_500Medium', letterSpacing: 0.3 },
+  title:            { fontSize: 28, color: colors.textPrimary, fontFamily: 'Sora_800ExtraBold', letterSpacing: -0.7, lineHeight: 34, marginBottom: 12 },
+  metaRow:          { flexDirection: 'row', gap: 16, marginBottom: 14, flexWrap: 'wrap' },
+  metaChip:         { flexDirection: 'row', alignItems: 'center' },
+  metaText:         { fontSize: 13, color: colors.textSecond, fontFamily: 'DMSans_400Regular' },
+  section:          { marginTop: 8, marginBottom: 8 },
+  sectionTitle:     { fontSize: 16, color: colors.textPrimary, fontFamily: 'Sora_700Bold', marginBottom: 10 },
+  description:      { fontSize: 14, color: colors.textSecond, fontFamily: 'DMSans_400Regular', lineHeight: 22 },
+  gateCard:         { backgroundColor: colors.bgSurface, borderRadius: 16, borderWidth: 1, padding: 20, alignItems: 'center', gap: 10, marginBottom: 24 },
+  gateIcon:         { width: 60, height: 60, borderRadius: 30, alignItems: 'center', justifyContent: 'center' },
+  gateTitle:        { fontSize: 18, color: colors.textPrimary, fontFamily: 'Sora_700Bold', textAlign: 'center' },
+  gateDesc:         { fontSize: 13, color: colors.textSecond, fontFamily: 'DMSans_400Regular', textAlign: 'center', lineHeight: 20, paddingHorizontal: 8 },
+  gateBtn:          { flexDirection: 'row', alignItems: 'center', width: '100%', paddingVertical: 13, borderRadius: 14, justifyContent: 'center', marginTop: 4 },
+  gateBtnText:      { color: '#fff', fontSize: 15, fontFamily: 'Sora_600SemiBold' },
+  gateHint:         { fontSize: 13, fontFamily: 'DMSans_500Medium' },
+  lessonRow:        { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
+  lessonNum:        { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.bgRaised, alignItems: 'center', justifyContent: 'center' },
+  lessonNumText:    { fontSize: 13, color: colors.textSecond, fontFamily: 'DMSans_600SemiBold' },
+  lessonTitle:      { fontSize: 14, color: colors.textPrimary, fontFamily: 'DMSans_500Medium' },
+  lessonDuration:   { fontSize: 12, color: colors.textMuted, fontFamily: 'DMSans_400Regular', marginTop: 2 },
+  separator:        { height: 1, backgroundColor: 'rgba(46,51,71,0.5)' },
+  bottomBar:        { position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 12, paddingBottom: 28, backgroundColor: colors.bgBase, borderTopWidth: 1, borderTopColor: 'rgba(46,51,71,0.6)' },
+  actionBtn:        { alignItems: 'center', gap: 5, paddingHorizontal: 16 },
+  actionLabel:      { fontSize: 11, color: colors.textSecond, fontFamily: 'DMSans_400Regular' },
+  errorText:        { fontSize: 14, color: colors.textSecond, fontFamily: 'DMSans_400Regular', textAlign: 'center', paddingHorizontal: 32 },
+  retryBtn:         { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(53,132,228,0.12)', borderWidth: 1, borderColor: 'rgba(53,132,228,0.3)' },
+  retryText:        { color: colors.primary, fontFamily: 'DMSans_500Medium', fontSize: 14 },
+});
+```
+
+## File: app/_layout.tsx
+```typescript
+/**
+ * app/_layout.tsx — Root layout StreamMG
+ *
+ * Expo Router — règle de nommage des Stack.Screen :
+ *  - Les groupes avec _layout.tsx propre (player/video, player/audio)
+ *    sont déclarés par leur NOM DE DOSSIER, pas par leur route dynamique.
+ *  - Expo Router découvre [id].tsx automatiquement à l'intérieur.
+ *  - Déclarer "player/video/[id]" cause un WARN car le router
+ *    cherche un enfant nommé exactement "player/video/[id]" au niveau racine.
+ */
+
+import { useEffect } from 'react';
+import { Stack } from 'expo-router';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
+import { StatusBar } from 'expo-status-bar';
+import '../styles/global.css';
+import {
+  Sora_400Regular,
+  Sora_500Medium,
+  Sora_600SemiBold,
+  Sora_700Bold,
+  Sora_800ExtraBold,
+} from '@expo-google-fonts/sora';
+import {
+  DMSans_400Regular,
+  DMSans_500Medium,
+  DMSans_600SemiBold,
+} from '@expo-google-fonts/dm-sans';
+
+import { AccessGateModal } from '@/components/content/AccessGateModal';
+import { MiniPlayer }      from '@/components/player/MiniPlayer';
+
+export { ErrorBoundary } from 'expo-router';
+
+export const unstable_settings = {
+  initialRouteName: '(auth)',
+};
+
+SplashScreen.preventAutoHideAsync();
+
+export default function RootLayout() {
+  const [loaded, error] = useFonts({
+    Sora_400Regular,
+    Sora_500Medium,
+    Sora_600SemiBold,
+    Sora_700Bold,
+    Sora_800ExtraBold,
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+  });
+
+  useEffect(() => { if (error) throw error; }, [error]);
+  useEffect(() => { if (loaded) SplashScreen.hideAsync(); }, [loaded]);
+
+  if (!loaded) return null;
+
+  return (
+    <>
+      <StatusBar style="light" backgroundColor="#0d1018" />
+
+      <Stack screenOptions={{ headerShown: false }}>
+        {/* Groupes tab et auth */}
+        {/* <Stack.Screen name="(auth)"   options={{ headerShown: false }} /> */}
+        <Stack.Screen name="(tabs)"   options={{ headerShown: false }} />
+        <Stack.Screen name="(auth)"   options={{ headerShown: false }} />
+
+        {/* Écran de détail — content/[id].tsx */}
+        <Stack.Screen name="content/[id]" options={{ headerShown: false }} />
+
+        {/* Groupes lecteurs — Expo découvre [id].tsx via leurs _layout.tsx */}
+        <Stack.Screen
+          name="player/video"
+          options={{ headerShown: false, animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="player/audio"
+          options={{ headerShown: false, animation: 'slide_from_bottom' }}
+        />
+
+        <Stack.Screen name="download/[id]"   options={{ headerShown: false }} />
+        <Stack.Screen name="purchase/[id]"  options={{ headerShown: false }} />
+        <Stack.Screen name="subscribe"       options={{ headerShown: false }} />
+        <Stack.Screen name="offline"    options={{ headerShown: false }} />
+        <Stack.Screen name="history"   options={{ headerShown: false }} />
+        <Stack.Screen name="purchases"             options={{ headerShown: false }} />
+        <Stack.Screen name="provider"              options={{ headerShown: false }} />
+        <Stack.Screen name="provider/upload"       options={{ headerShown: false }} />
+        <Stack.Screen name="provider/edit/[id]"    options={{ headerShown: false }} />
+        <Stack.Screen name="admin"                 options={{ headerShown: false }} />
+        <Stack.Screen name="admin/contents"        options={{ headerShown: false }} />
+        <Stack.Screen name="admin/users"           options={{ headerShown: false }} />
+        <Stack.Screen name="+not-found"      options={{ headerShown: false }} />
+      </Stack>
+
+      <AccessGateModal />
+      <MiniPlayer />
+    </>
+  );
+}
+```
+
+## File: app/player/video/[id].tsx
+```typescript
+/**
+ * app/player/video/[id].tsx — Lecteur vidéo HLS (Mode Hybride Mobile)
+ *
+ * Flux :
+ *   1. GET /hls/:id/token  → hlsUrl signé (10 min)
+ *      Headers ajoutés : X-Platform: mobile, X-Device-Id: <deviceId>
+ *      → Le backend génère un token avec platform='mobile' dans le payload
+ *      → Le backend réécrit index.m3u8 pour apposer ?token= sur chaque .ts
+ *      → Le middleware désactive la vérif IP/UA pour mobile (HMAC suffit)
+ *   2. expo-av Video reçoit hlsUrl — lecture transparente sans cookie
+ *   3. POST /history/:id toutes les 10s + à la fermeture
+ *
+ * Spec de référence : SPECIFICATION_HLS_HYBRIDE.md
+ *
+ * Importe  : apiClient, expo-device, theme
+ * Monté par: app/player/video/_layout.tsx
+ */
+
+import React, { useEffect, useRef, useCallback, useState } from 'react';
+import {
+  View, Text, TouchableOpacity, ActivityIndicator,
+  StyleSheet, StatusBar, Dimensions,
+} from 'react-native';
+import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import * as Device from 'expo-device';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { apiClient } from '@/lib/apiClient';
+import { BASE_URL } from '@/lib/theme';
+import { colors } from '@/lib/theme';
+import { formatError } from '@/lib/errorFormatter';
+
+// ─── Constantes ───────────────────────────────────────────────────────────────
+
+const HISTORY_INTERVAL_MS = 10_000;
+
+/**
+ * Identifiant stable de l'appareil pour le token HLS mobile.
+ * expo-device.osBuildId est stable entre les sessions sur le même device.
+ * Fallback sur un UUID généré si non disponible (simulateur).
+ */
+function getDeviceId(): string {
+  return Device.osBuildId ?? Device.modelId ?? 'expo-simulator-' + Date.now();
+}
+
+// ─── Composant ────────────────────────────────────────────────────────────────
+
+export default function VideoPlayerScreen() {
+  const { id, lessonIndex } = useLocalSearchParams<{
+    id:           string;
+    lessonIndex?: string;
+  }>();
+
+  const videoRef     = useRef<Video>(null);
+  const positionRef  = useRef(0);
+  const durationRef  = useRef(0);
+  const historyTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [hlsUrl,   setHlsUrl]   = useState<string | null>(null);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
+  const [paused,   setPaused]   = useState(false);
+  const [showCtrl, setShowCtrl] = useState(true);
+  const [title,    setTitle]    = useState('');
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isReady,  setIsReady]  = useState(false);
+
+  // ── Orientation ──────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE).catch(() => {});
+    return () => {
+      ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT_UP).catch(() => {});
+    };
+  }, []);
+
+  // ── Chargement token HLS ─────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (!id) return;
+    loadToken();
+  }, [id]);
+
+  const loadToken = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // 1. Métadonnées
+      const { data: detail } = await apiClient.get(`/contents/${id}`);
+      setTitle(detail.title);
+
+      // 2. Token HLS — headers hybrides mobile
+      //    X-Platform  : informe le backend qu'il doit générer un token mobile
+      //    X-Device-Id : scellé dans le HMAC — remplace le fingerprint IP/UA
+      const { data } = await apiClient.get(`/hls/${id}/token`, {
+        headers: {
+          'X-Platform':  'mobile',
+          'X-Device-Id': getDeviceId(),
+        },
+      });
+
+      // 3. L'URL reçue pointe vers index.m3u8?token=xxx
+      //    Le backend réécrit ce manifest à la volée pour apposer ?token= sur chaque .ts
+      const fullUrl = data.hlsUrl.startsWith('http')
+        ? data.hlsUrl
+        : `${BASE_URL}${data.hlsUrl}`;
+
+      setHlsUrl(fullUrl);
+
+      // 4. Incrémenter vues (fire & forget)
+      apiClient.post(`/contents/${id}/view`).catch(() => {});
+
+    } catch (e: any) {
+      if (e?.response?.status === 403) {
+        router.back(); // AccessGateModal géré par l'intercepteur
+      } else {
+        setError(formatError(e, 'Impossible de charger la vidéo.'));
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Historique ───────────────────────────────────────────────────────────────
+
+  const saveHistory = useCallback(async (completed = false) => {
+    if (!id || positionRef.current === 0) return;
+    try {
+      await apiClient.post(`/history/${id}`, {
+        progress:  Math.floor(positionRef.current),
+        duration:  Math.floor(durationRef.current),
+        completed,
+      });
+    } catch { /* silencieux */ }
+  }, [id]);
+
+  useEffect(() => {
+    historyTimer.current = setInterval(() => saveHistory(), HISTORY_INTERVAL_MS);
+    return () => {
+      if (historyTimer.current) clearInterval(historyTimer.current);
+      saveHistory();
+    };
+  }, [saveHistory]);
+
+  // ── Playback status ──────────────────────────────────────────────────────────
+
+  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
+    if (!status.isLoaded) return;
+    
+    // Marquer la vidéo comme prête
+    setIsReady(true);
+    
+    positionRef.current = (status.positionMillis ?? 0) / 1000;
+    durationRef.current = (status.durationMillis ?? 0) / 1000;
+
+    // Complétion à 90%
+    if (durationRef.current > 0 && positionRef.current / durationRef.current >= 0.9) {
+      saveHistory(true);
+    }
+
+    // Token expiré (10 min) → renouveler automatiquement
+    if ((status as { error?: string }).error) {
+      loadToken();
+    }
+  }, [saveHistory]);
+
+  // ── Position update interval (fix: update every second) ─────────────────────
+
+  useEffect(() => {
+    if (!isReady || paused) return;
+
+    const interval = setInterval(async () => {
+      if (videoRef.current) {
+        const status = await videoRef.current.getStatusAsync();
+        if (status.isLoaded) {
+          const pos = (status.positionMillis ?? 0) / 1000;
+          const dur = (status.durationMillis ?? 0) / 1000;
+          positionRef.current = pos;
+          durationRef.current = dur;
+          setPosition(pos);
+          setDuration(dur);
+        }
+      }
+    }, 1000); // Update every second
+
+    return () => clearInterval(interval);
+  }, [isReady, paused]);
+
+  // ── Contrôles ────────────────────────────────────────────────────────────────
+
+  const togglePlay = async () => {
+    if (!videoRef.current) return;
+    if (paused) { await videoRef.current.playAsync();  setPaused(false); }
+    else        { await videoRef.current.pauseAsync(); setPaused(true);  }
+  };
+
+  const seek = async (seconds: number) => {
+    if (!videoRef.current) return;
+    await videoRef.current.setPositionAsync(
+      Math.max(0, (positionRef.current + seconds) * 1000)
+    );
+  };
+
+  // ── Rendu ────────────────────────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <View style={s.centered}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={s.loadingText}>Chargement…</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={s.centered}>
+        <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} />
+        <Text style={s.errorText}>{error}</Text>
+        <TouchableOpacity style={s.retryBtn} onPress={loadToken}>
+          <Text style={s.retryText}>Réessayer</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  return (
+    <View style={s.root}>
+      <StatusBar hidden />
+
+      {/* Vidéo */}
+      <TouchableOpacity
+        style={StyleSheet.absoluteFillObject}
+        onPress={() => setShowCtrl((v) => !v)}
+        activeOpacity={1}
+      >
+        <Video
+          ref={videoRef}
+          source={{ uri: hlsUrl! }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode={ResizeMode.CONTAIN}
+          shouldPlay
+          onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+          useNativeControls={false}
+        />
+      </TouchableOpacity>
+
+      {/* Overlay contrôles */}
+      {showCtrl && (
+        <View style={s.overlay} pointerEvents="box-none">
+          {/* Header */}
+          <SafeAreaView style={s.header} edges={['top', 'left', 'right']}>
+            <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
+              <Ionicons name="chevron-down" size={24} color="#fff" />
+            </TouchableOpacity>
+            <Text style={s.titleText} numberOfLines={1}>{title}</Text>
+            <View style={{ width: 40 }} />
+          </SafeAreaView>
+
+          {/* Contrôles centre */}
+          <View style={s.centerControls}>
+            <TouchableOpacity onPress={() => seek(-10)} accessibilityLabel="Reculer 10s">
+              <Ionicons name="play-back" size={28} color="#fff" />
+              <Text style={s.seekLabel}>10</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={s.playBtn} onPress={togglePlay}>
+              <Ionicons
+                name={paused ? 'play' : 'pause'}
+                size={32}
+                color="#fff"
+                style={paused ? { marginLeft: 3 } : undefined}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => seek(10)} accessibilityLabel="Avancer 10s">
+              <Ionicons name="play-forward" size={28} color="#fff" />
+              <Text style={s.seekLabel}>10</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Footer — barre de progression */}
+          <SafeAreaView style={s.footer} edges={['bottom', 'left', 'right']}>
+            <Text style={s.timeText}>{formatTime(position)}</Text>
+            <View style={s.progressTrack}>
+              <View
+                style={[
+                  s.progressFill,
+                  {
+                    width: duration > 0
+                      ? `${(position / duration) * 100}%`
+                      : '0%',
+                  },
+                ]}
+              />
+            </View>
+            <Text style={s.timeText}>{formatTime(duration)}</Text>
+          </SafeAreaView>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTime(sec: number): string {
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+  return `${m}:${pad(s)}`;
+}
+function pad(n: number): string { return String(n).padStart(2, '0'); }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root:    { flex: 1, backgroundColor: '#000' },
+  centered:{ flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center', gap: 16 },
+  overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between' },
+
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, backgroundColor: 'rgba(0,0,0,0.45)' },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  titleText: { flex: 1, textAlign: 'center', color: '#fff', fontSize: 15, fontFamily: 'Sora_600SemiBold' },
+
+  centerControls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 48 },
+  playBtn: { width: 68, height: 68, borderRadius: 34, backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', justifyContent: 'center' },
+  seekLabel: { color: '#fff', fontSize: 11, fontFamily: 'DMSans_400Regular', textAlign: 'center', marginTop: 2, opacity: 0.8 },
+
+  footer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 12, gap: 10, backgroundColor: 'rgba(0,0,0,0.45)' },
+  progressTrack: { flex: 1, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.25)', overflow: 'hidden' },
+  progressFill:  { height: 3, backgroundColor: colors.primary, borderRadius: 2 },
+  timeText: { color: '#fff', fontSize: 12, fontFamily: 'DMSans_400Regular', opacity: 0.85, minWidth: 40, textAlign: 'center' },
+
+  loadingText: { color: colors.textSecond, fontFamily: 'DMSans_400Regular', fontSize: 14 },
+  errorText:   { color: colors.textSecond, fontFamily: 'DMSans_400Regular', textAlign: 'center', paddingHorizontal: 32 },
+  retryBtn:    { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(53,132,228,0.15)', borderWidth: 1, borderColor: 'rgba(53,132,228,0.3)' },
+  retryText:   { color: colors.primary, fontFamily: 'DMSans_500Medium', fontSize: 14 },
+});
+```

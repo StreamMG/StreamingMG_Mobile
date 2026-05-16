@@ -11,45 +11,44 @@
  * Hors-ligne : déclenche l'access gate inline si l'accès n'est pas accordé.
  */
 
-import React, { useCallback } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useCallback } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Dimensions,
   Image,
   ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
   Share,
   StyleSheet,
-  Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AccessBadge, CategoryBadge } from '@/components/ui/Badge';
-import { ProgressBar }   from '@/components/ui/ProgressBar';
-import { StarRating }    from '@/components/ui/StarRating';
-import { useContentDetail } from '@/hooks/useContentDetail';
-import { useAuthStore }     from '@/stores/authStore';
-import { colors }           from '@/lib/theme';
-import type { Lesson }      from '@/hooks/useContentDetail';
-import { Button } from '../ui/Button';
+import { AccessBadge, CategoryBadge } from "@/components/ui/Badge";
+import { ProgressBar } from "@/components/ui/ProgressBar";
+import { StarRating } from "@/components/ui/StarRating";
+import type { Lesson } from "@/hooks/useContentDetail";
+import { useContentDetail } from "@/hooks/useContentDetail";
+import { colors } from "@/lib/theme";
+import { useAuthStore } from "@/stores/authStore";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
-const { width: W } = Dimensions.get('window');
-const HERO_HEIGHT  = Math.round(W * 0.56);
-const BASE_URL     = __DEV__
-  ? 'http://localhost:3001'
-  : 'https://api.streamMG.railway.app';
+const { width: W } = Dimensions.get("window");
+const HERO_HEIGHT = Math.round(W * 0.56);
+const BASE_URL = __DEV__
+  ? "http://localhost:3001"
+  : "https://api.streamMG.railway.app";
 
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export default function ContentDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { content, tutorial, accessStatus, loading, error, refresh } =
-    useContentDetail(id ?? '');
+    useContentDetail(id ?? "");
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   // ── Navigation lecteur ────────────────────────────────────────────────────
@@ -59,10 +58,13 @@ export default function ContentDetailScreen() {
     router.push(`/player/${content._id}`);
   }, [content]);
 
-  const handleLessonPress = useCallback((lesson: Lesson) => {
-    if (!content) return;
-    router.push(`/player/${content._id}?lessonIndex=${lesson.index}`);
-  }, [content]);
+  const handleLessonPress = useCallback(
+    (lesson: Lesson) => {
+      if (!content) return;
+      router.push(`/player/${content._id}?lessonIndex=${lesson.index}`);
+    },
+    [content],
+  );
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -76,11 +78,11 @@ export default function ContentDetailScreen() {
 
   const handleDownload = useCallback(() => {
     if (!content) return;
-    router.push(`/download/${content._id}`);
+    router.push({ pathname: "/download/[id]", params: { id: content._id } });
   }, [content]);
 
   const handleSubscribe = useCallback(() => {
-    router.push('/subscribe');
+    router.push("/subscribe");
   }, []);
 
   const handlePurchase = useCallback(() => {
@@ -89,7 +91,7 @@ export default function ContentDetailScreen() {
   }, [content]);
 
   const handleLogin = useCallback(() => {
-    router.push('/(auth)/login');
+    router.push("/(auth)/login");
   }, []);
 
   // ── États ─────────────────────────────────────────────────────────────────
@@ -105,8 +107,13 @@ export default function ContentDetailScreen() {
   if (error || !content) {
     return (
       <SafeAreaView style={s.centered}>
-        <Ionicons name="alert-circle-outline" size={48} color={colors.textMuted} style={{ opacity: 0.5 }} />
-        <Text style={s.errorText}>{error ?? 'Contenu introuvable'}</Text>
+        <Ionicons
+          name="alert-circle-outline"
+          size={48}
+          color={colors.textMuted}
+          style={{ opacity: 0.5 }}
+        />
+        <Text style={s.errorText}>{error ?? "Contenu introuvable"}</Text>
         <TouchableOpacity style={s.retryBtn} onPress={refresh}>
           <Text style={s.retryText}>Réessayer</Text>
         </TouchableOpacity>
@@ -114,12 +121,12 @@ export default function ContentDetailScreen() {
     );
   }
 
-  const thumbnailUri = content.thumbnail.startsWith('http')
+  const thumbnailUri = content.thumbnail.startsWith("http")
     ? content.thumbnail
     : `${BASE_URL}${content.thumbnail}`;
 
-  const canAccess   = accessStatus === 'granted';
-  const isVideo     = content.type === 'video';
+  const canAccess = accessStatus === "granted";
+  const isVideo = content.type === "video";
 
   // ── Rendu ──────────────────────────────────────────────────────────────────
 
@@ -141,26 +148,29 @@ export default function ContentDetailScreen() {
           <View style={s.heroGradient} pointerEvents="none" />
 
           {/* Bouton retour */}
-          <SafeAreaView style={s.backButtonContainer} edges={['top']}>
+          <SafeAreaView style={s.backButtonContainer} edges={["top"]}>
             <TouchableOpacity
               style={s.backButton}
               onPress={() => router.back()}
               accessibilityLabel="Retour"
             >
-              <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+              <Ionicons
+                name="arrow-back"
+                size={20}
+                color={colors.textPrimary}
+              />
             </TouchableOpacity>
           </SafeAreaView>
         </View>
 
         {/* ── Corps ── */}
         <View style={s.body}>
-
           {/* Badges (type + accès) */}
           <View style={s.badgeRow}>
-            {content.accessType !== 'free' && (
+            {content.accessType !== "free" && (
               <AccessBadge variant={content.accessType} price={content.price} />
             )}
-            <CategoryBadge label={isVideo ? 'Vidéo' : 'Audio'} />
+            <CategoryBadge label={isVideo ? "Vidéo" : "Audio"} />
           </View>
 
           {/* Titre */}
@@ -168,10 +178,19 @@ export default function ContentDetailScreen() {
 
           {/* Métadonnées */}
           <View style={s.metaRow}>
-            <MetaChip icon="time-outline" label={formatDuration(content.duration)} />
-            <MetaChip icon="eye-outline"  label={formatViews(content.viewCount)} />
+            <MetaChip
+              icon="time-outline"
+              label={formatDuration(content.duration)}
+            />
+            <MetaChip
+              icon="eye-outline"
+              label={formatViews(content.viewCount)}
+            />
             {content.language && (
-              <MetaChip icon="globe-outline" label={formatLanguage(content.language)} />
+              <MetaChip
+                icon="globe-outline"
+                label={formatLanguage(content.language)}
+              />
             )}
           </View>
 
@@ -204,16 +223,16 @@ export default function ContentDetailScreen() {
               onPress={handleWatch}
               activeOpacity={0.85}
               accessibilityRole="button"
-              accessibilityLabel={isVideo ? 'Regarder' : 'Écouter'}
+              accessibilityLabel={isVideo ? "Regarder" : "Écouter"}
             >
               <Ionicons
-                name={isVideo ? 'play' : 'headset'}
+                name={isVideo ? "play" : "headset"}
                 size={18}
                 color="#fff"
                 style={{ marginRight: 8 }}
               />
               <Text style={s.watchButtonText}>
-                {isVideo ? 'Regarder' : 'Écouter'}
+                {isVideo ? "Regarder" : "Écouter"}
               </Text>
             </TouchableOpacity>
           )}
@@ -250,7 +269,6 @@ export default function ContentDetailScreen() {
               onLessonPress={handleLessonPress}
             />
           )}
-
         </View>
       </ScrollView>
 
@@ -260,11 +278,11 @@ export default function ContentDetailScreen() {
         onShare={handleShare}
         onDownload={handleDownload}
         onDownloadBlocked={
-          accessStatus === 'login_required'
+          accessStatus === "login_required"
             ? handleLogin
-            : accessStatus === 'subscription_required'
-            ? handleSubscribe
-            : handlePurchase
+            : accessStatus === "subscription_required"
+              ? handleSubscribe
+              : handlePurchase
         }
       />
     </View>
@@ -281,42 +299,68 @@ interface InlineAccessGateProps {
   onLogin: () => void;
 }
 
-function InlineAccessGate({ reason, price, onSubscribe, onPurchase, onLogin }: InlineAccessGateProps) {
-  const isPremium  = reason === 'subscription_required';
-  const isPurchase = reason === 'purchase_required';
+function InlineAccessGate({
+  reason,
+  price,
+  onSubscribe,
+  onPurchase,
+  onLogin,
+}: InlineAccessGateProps) {
+  const isPremium = reason === "subscription_required";
+  const isPurchase = reason === "purchase_required";
 
-  const accentColor = isPremium ? colors.gold : isPurchase ? colors.teal : colors.primary;
-  const accentBg    = isPremium
-    ? 'rgba(232,197,71,0.10)'
+  const accentColor = isPremium
+    ? colors.gold
     : isPurchase
-    ? 'rgba(46,194,126,0.10)'
-    : 'rgba(53,132,228,0.10)';
+      ? colors.teal
+      : colors.primary;
+  const accentBg = isPremium
+    ? "rgba(232,197,71,0.10)"
+    : isPurchase
+      ? "rgba(46,194,126,0.10)"
+      : "rgba(53,132,228,0.10)";
 
-  const handleAction = isPremium ? onSubscribe : isPurchase ? onPurchase : onLogin;
-  const actionLabel  = isPremium
+  const handleAction = isPremium
+    ? onSubscribe
+    : isPurchase
+      ? onPurchase
+      : onLogin;
+  const actionLabel = isPremium
     ? "S'abonner à Premium"
     : isPurchase
-    ? 'Acheter ce contenu'
-    : 'Se connecter';
-  const actionIcon   = isPremium ? 'star-outline' : isPurchase ? 'lock-closed-outline' : 'log-in-outline';
+      ? "Acheter ce contenu"
+      : "Se connecter";
+  const actionIcon = isPremium
+    ? "star-outline"
+    : isPurchase
+      ? "lock-closed-outline"
+      : "log-in-outline";
 
   return (
     <View style={[s.gateCard, { borderColor: `${accentColor}22` }]}>
       {/* Icône */}
       <View style={[s.gateIconCircle, { backgroundColor: accentBg }]}>
-        <Ionicons name={isPremium ? 'star' : isPurchase ? 'lock-closed' : 'person'} size={28} color={accentColor} />
+        <Ionicons
+          name={isPremium ? "star" : isPurchase ? "lock-closed" : "person"}
+          size={28}
+          color={accentColor}
+        />
       </View>
 
       <Text style={s.gateTitle}>
-        {isPremium ? 'Contenu Premium' : isPurchase ? 'Contenu payant' : 'Connexion requise'}
+        {isPremium
+          ? "Contenu Premium"
+          : isPurchase
+            ? "Contenu payant"
+            : "Connexion requise"}
       </Text>
 
       <Text style={s.gateDescription}>
         {isPremium
           ? "Abonnez-vous à Premium pour accéder à ce contenu et à tout le catalogue premium."
           : isPurchase
-          ? "Achetez ce contenu pour un accès permanent, indépendant de tout abonnement."
-          : "Connectez-vous pour accéder à ce contenu."}
+            ? "Achetez ce contenu pour un accès permanent, indépendant de tout abonnement."
+            : "Connectez-vous pour accéder à ce contenu."}
       </Text>
 
       <TouchableOpacity
@@ -324,15 +368,24 @@ function InlineAccessGate({ reason, price, onSubscribe, onPurchase, onLogin }: I
         onPress={handleAction}
         activeOpacity={0.85}
       >
-        <Ionicons name={actionIcon as any} size={16} color="#fff" style={{ marginRight: 8 }} />
+        <Ionicons
+          name={actionIcon as any}
+          size={16}
+          color="#fff"
+          style={{ marginRight: 8 }}
+        />
         <Text style={s.gateButtonText}>{actionLabel}</Text>
       </TouchableOpacity>
 
       {isPremium && (
-        <Text style={[s.gatePriceHint, { color: accentColor }]}>5 000 Ar/mois</Text>
+        <Text style={[s.gatePriceHint, { color: accentColor }]}>
+          5 000 Ar/mois
+        </Text>
       )}
       {isPurchase && price != null && (
-        <Text style={[s.gatePriceHint, { color: accentColor }]}>{formatPrice(price)}</Text>
+        <Text style={[s.gatePriceHint, { color: accentColor }]}>
+          {formatPrice(price)}
+        </Text>
       )}
     </View>
   );
@@ -341,16 +394,14 @@ function InlineAccessGate({ reason, price, onSubscribe, onPurchase, onLogin }: I
 // ─── TutorialSection ──────────────────────────────────────────────────────────
 
 interface TutorialSectionProps {
-  tutorial: NonNullable<ReturnType<typeof useContentDetail>['tutorial']>;
+  tutorial: NonNullable<ReturnType<typeof useContentDetail>["tutorial"]>;
   onLessonPress: (lesson: Lesson) => void;
 }
 
 function TutorialSection({ tutorial, onLessonPress }: TutorialSectionProps) {
   return (
     <View style={s.section}>
-      <Text style={s.sectionTitle}>
-        Leçons ({tutorial.totalLessons})
-      </Text>
+      <Text style={s.sectionTitle}>Leçons ({tutorial.totalLessons})</Text>
 
       {/* Barre de progression globale */}
       {tutorial.percentComplete > 0 && (
@@ -367,7 +418,7 @@ function TutorialSection({ tutorial, onLessonPress }: TutorialSectionProps) {
       {/* Liste leçons */}
       {tutorial.lessons.map((lesson, i) => {
         const isCompleted = tutorial.completedLessons.includes(lesson.index);
-        const isCurrent   = lesson.index === tutorial.lastLessonIndex + 1;
+        const isCurrent = lesson.index === tutorial.lastLessonIndex + 1;
 
         return (
           <React.Fragment key={lesson.index}>
@@ -379,15 +430,26 @@ function TutorialSection({ tutorial, onLessonPress }: TutorialSectionProps) {
               accessibilityLabel={`${lesson.title}, ${formatDuration(lesson.duration)}`}
             >
               {/* Numéro / check */}
-              <View style={[
-                s.lessonIndex,
-                isCompleted && { backgroundColor: colors.primary },
-                isCurrent && !isCompleted && { borderColor: colors.primary, borderWidth: 1.5 },
-              ]}>
+              <View
+                style={[
+                  s.lessonIndex,
+                  isCompleted && { backgroundColor: colors.primary },
+                  isCurrent &&
+                    !isCompleted && {
+                      borderColor: colors.primary,
+                      borderWidth: 1.5,
+                    },
+                ]}
+              >
                 {isCompleted ? (
                   <Ionicons name="checkmark" size={12} color="#fff" />
                 ) : (
-                  <Text style={[s.lessonIndexText, isCurrent && { color: colors.primary }]}>
+                  <Text
+                    style={[
+                      s.lessonIndexText,
+                      isCurrent && { color: colors.primary },
+                    ]}
+                  >
                     {lesson.index + 1}
                   </Text>
                 )}
@@ -395,10 +457,17 @@ function TutorialSection({ tutorial, onLessonPress }: TutorialSectionProps) {
 
               {/* Titre + durée */}
               <View style={{ flex: 1 }}>
-                <Text style={[s.lessonTitle, isCompleted && { color: colors.textSecond }]}>
+                <Text
+                  style={[
+                    s.lessonTitle,
+                    isCompleted && { color: colors.textSecond },
+                  ]}
+                >
                   {lesson.title}
                 </Text>
-                <Text style={s.lessonDuration}>{formatDuration(lesson.duration)}</Text>
+                <Text style={s.lessonDuration}>
+                  {formatDuration(lesson.duration)}
+                </Text>
               </View>
 
               {/* Bouton play */}
@@ -438,8 +507,12 @@ function BottomActionsBar({
 }: BottomActionsBarProps) {
   return (
     <View style={s.bottomBar}>
-      <ActionButton icon="heart-outline"        label="Favoris"    onPress={() => {}} />
-      <ActionButton icon="share-social-outline" label="Partager"   onPress={onShare} />
+      <ActionButton icon="heart-outline" label="Favoris" onPress={() => {}} />
+      <ActionButton
+        icon="share-social-outline"
+        label="Partager"
+        onPress={onShare}
+      />
       {/* Hors-ligne — toujours visible, accès conditionnel */}
       <ActionButton
         icon="download-outline"
@@ -463,11 +536,7 @@ function ActionButton({
   dimmed?: boolean;
 }) {
   return (
-    <TouchableOpacity
-      style={s.actionBtn}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity style={s.actionBtn} onPress={onPress} activeOpacity={0.7}>
       <Ionicons
         name={icon as any}
         size={22}
@@ -484,7 +553,12 @@ function ActionButton({
 function MetaChip({ icon, label }: { icon: string; label: string }) {
   return (
     <View style={s.metaChip}>
-      <Ionicons name={icon as any} size={13} color={colors.textMuted} style={{ marginRight: 4 }} />
+      <Ionicons
+        name={icon as any}
+        size={13}
+        color={colors.textMuted}
+        style={{ marginRight: 4 }}
+      />
       <Text style={s.metaText}>{label}</Text>
     </View>
   );
@@ -493,11 +567,11 @@ function MetaChip({ icon, label }: { icon: string; label: string }) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDuration(sec: number | null): string {
-  if (sec === null || sec === 0) return '--';
+  if (sec === null || sec === 0) return "--";
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = Math.floor(sec % 60);
-  if (h > 0) return `${h}h${m > 0 ? m + 'min' : ''}`;
+  if (h > 0) return `${h}h${m > 0 ? m + "min" : ""}`;
   if (m > 0) return `${m}min`;
   return `${s}s`;
 }
@@ -508,134 +582,243 @@ function formatViews(n: number): string {
 }
 
 function formatLanguage(lang: string): string {
-  const map: Record<string, string> = { mg: 'Malagasy', fr: 'Français', en: 'English' };
+  const map: Record<string, string> = {
+    mg: "Malagasy",
+    fr: "Français",
+    en: "English",
+  };
   return map[lang] ?? lang;
 }
 
 function formatPrice(ar: number): string {
   if (ar >= 1_000_000) return `${(ar / 1_000_000).toFixed(1)}M Ar`;
-  if (ar >= 1000)      return `${(ar / 1000).toFixed(0)}k Ar`;
+  if (ar >= 1000) return `${(ar / 1000).toFixed(0)}k Ar`;
   return `${ar} Ar`;
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
-  root:    { flex: 1, backgroundColor: colors.bgBase },
-  scroll:  { flex: 1 },
-  centered: { flex: 1, backgroundColor: colors.bgBase, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  root: { flex: 1, backgroundColor: colors.bgBase },
+  scroll: { flex: 1 },
+  centered: {
+    flex: 1,
+    backgroundColor: colors.bgBase,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+  },
 
   // Hero
   heroGradient: {
-    position: 'absolute', bottom: 0, left: 0, right: 0, height: '60%',
-    backgroundColor: 'rgba(13,16,24,0.6)',
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "60%",
+    backgroundColor: "rgba(13,16,24,0.6)",
   },
-  backButtonContainer: { position: 'absolute', top: 0, left: 0 },
+  backButtonContainer: { position: "absolute", top: 0, left: 0 },
   backButton: {
     margin: 16,
-    width: 38, height: 38, borderRadius: 19,
-    backgroundColor: 'rgba(13,16,24,0.65)',
-    borderWidth: 1, borderColor: 'rgba(46,51,71,0.7)',
-    alignItems: 'center', justifyContent: 'center',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(13,16,24,0.65)",
+    borderWidth: 1,
+    borderColor: "rgba(46,51,71,0.7)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // Body
   body: { padding: 20, gap: 0 },
 
-  badgeRow: { flexDirection: 'row', gap: 8, marginBottom: 10, flexWrap: 'wrap' },
+  badgeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: "wrap",
+  },
 
   title: {
-    fontSize: 28, color: colors.textPrimary,
-    fontFamily: 'Sora_800ExtraBold', letterSpacing: -0.7, lineHeight: 34,
+    fontSize: 28,
+    color: colors.textPrimary,
+    fontFamily: "Sora_800ExtraBold",
+    letterSpacing: -0.7,
+    lineHeight: 34,
     marginBottom: 12,
   },
 
-  metaRow: { flexDirection: 'row', gap: 16, marginBottom: 14, flexWrap: 'wrap' },
-  metaChip: { flexDirection: 'row', alignItems: 'center' },
-  metaText: { fontSize: 13, color: colors.textSecond, fontFamily: 'DMSans_400Regular' },
+  metaRow: {
+    flexDirection: "row",
+    gap: 16,
+    marginBottom: 14,
+    flexWrap: "wrap",
+  },
+  metaChip: { flexDirection: "row", alignItems: "center" },
+  metaText: {
+    fontSize: 13,
+    color: colors.textSecond,
+    fontFamily: "DMSans_400Regular",
+  },
 
   // Bouton principal
   watchButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.primary,
-    borderRadius: 16, paddingVertical: 14,
+    borderRadius: 16,
+    paddingVertical: 14,
     marginBottom: 24,
-    shadowColor: colors.primary, shadowOpacity: 0.35,
-    shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    shadowColor: colors.primary,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 5,
   },
-  watchButtonText: { color: '#fff', fontSize: 16, fontFamily: 'Sora_600SemiBold' },
+  watchButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontFamily: "Sora_600SemiBold",
+  },
 
   // Section
   section: { marginTop: 8, marginBottom: 8 },
   sectionTitle: {
-    fontSize: 16, color: colors.textPrimary,
-    fontFamily: 'Sora_700Bold', marginBottom: 10,
+    fontSize: 16,
+    color: colors.textPrimary,
+    fontFamily: "Sora_700Bold",
+    marginBottom: 10,
   },
   description: {
-    fontSize: 14, color: colors.textSecond,
-    fontFamily: 'DMSans_400Regular', lineHeight: 22,
+    fontSize: 14,
+    color: colors.textSecond,
+    fontFamily: "DMSans_400Regular",
+    lineHeight: 22,
   },
 
   // Access gate inline
   gateCard: {
     backgroundColor: colors.bgSurface,
-    borderRadius: 16, borderWidth: 1,
-    padding: 20, alignItems: 'center', gap: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 20,
+    alignItems: "center",
+    gap: 10,
     marginBottom: 24,
   },
   gateIconCircle: {
-    width: 60, height: 60, borderRadius: 30,
-    alignItems: 'center', justifyContent: 'center',
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
   },
   gateTitle: {
-    fontSize: 18, color: colors.textPrimary,
-    fontFamily: 'Sora_700Bold', textAlign: 'center',
+    fontSize: 18,
+    color: colors.textPrimary,
+    fontFamily: "Sora_700Bold",
+    textAlign: "center",
   },
   gateDescription: {
-    fontSize: 13, color: colors.textSecond,
-    fontFamily: 'DMSans_400Regular', textAlign: 'center',
-    lineHeight: 20, paddingHorizontal: 8,
+    fontSize: 13,
+    color: colors.textSecond,
+    fontFamily: "DMSans_400Regular",
+    textAlign: "center",
+    lineHeight: 20,
+    paddingHorizontal: 8,
   },
   gateButton: {
-    flexDirection: 'row', alignItems: 'center',
-    width: '100%', paddingVertical: 13,
-    borderRadius: 14, justifyContent: 'center', marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    paddingVertical: 13,
+    borderRadius: 14,
+    justifyContent: "center",
+    marginTop: 4,
   },
-  gateButtonText: { color: '#fff', fontSize: 15, fontFamily: 'Sora_600SemiBold' },
-  gatePriceHint:  { fontSize: 13, fontFamily: 'DMSans_500Medium' },
+  gateButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Sora_600SemiBold",
+  },
+  gatePriceHint: { fontSize: 13, fontFamily: "DMSans_500Medium" },
 
   // Leçons
   lessonRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
     paddingVertical: 14,
   },
   lessonIndex: {
-    width: 32, height: 32, borderRadius: 16,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.bgRaised,
-    alignItems: 'center', justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   lessonIndexText: {
-    fontSize: 13, color: colors.textSecond,
-    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 13,
+    color: colors.textSecond,
+    fontFamily: "DMSans_600SemiBold",
   },
-  lessonTitle:    { fontSize: 14, color: colors.textPrimary, fontFamily: 'DMSans_500Medium' },
-  lessonDuration: { fontSize: 12, color: colors.textMuted, fontFamily: 'DMSans_400Regular', marginTop: 2 },
-  lessonSeparator: { height: 1, backgroundColor: 'rgba(46,51,71,0.5)' },
+  lessonTitle: {
+    fontSize: 14,
+    color: colors.textPrimary,
+    fontFamily: "DMSans_500Medium",
+  },
+  lessonDuration: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontFamily: "DMSans_400Regular",
+    marginTop: 2,
+  },
+  lessonSeparator: { height: 1, backgroundColor: "rgba(46,51,71,0.5)" },
 
   // Barre bas
   bottomBar: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    flexDirection: 'row', justifyContent: 'space-around',
-    paddingVertical: 12, paddingBottom: 28,
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingVertical: 12,
+    paddingBottom: 28,
     backgroundColor: colors.bgBase,
-    borderTopWidth: 1, borderTopColor: 'rgba(46,51,71,0.6)',
+    borderTopWidth: 1,
+    borderTopColor: "rgba(46,51,71,0.6)",
   },
-  actionBtn:   { alignItems: 'center', gap: 5, paddingHorizontal: 16 },
-  actionLabel: { fontSize: 11, color: colors.textSecond, fontFamily: 'DMSans_400Regular' },
+  actionBtn: { alignItems: "center", gap: 5, paddingHorizontal: 16 },
+  actionLabel: {
+    fontSize: 11,
+    color: colors.textSecond,
+    fontFamily: "DMSans_400Regular",
+  },
 
   // Erreur
-  errorText: { fontSize: 14, color: colors.textSecond, fontFamily: 'DMSans_400Regular', textAlign: 'center', paddingHorizontal: 32 },
-  retryBtn:  { paddingHorizontal: 24, paddingVertical: 10, borderRadius: 20, backgroundColor: 'rgba(53,132,228,0.12)', borderWidth: 1, borderColor: 'rgba(53,132,228,0.3)' },
-  retryText: { color: colors.primary, fontFamily: 'DMSans_500Medium', fontSize: 14 },
+  errorText: {
+    fontSize: 14,
+    color: colors.textSecond,
+    fontFamily: "DMSans_400Regular",
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
+  retryBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: "rgba(53,132,228,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(53,132,228,0.3)",
+  },
+  retryText: {
+    color: colors.primary,
+    fontFamily: "DMSans_500Medium",
+    fontSize: 14,
+  },
 });

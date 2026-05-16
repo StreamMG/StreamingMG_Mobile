@@ -25,7 +25,7 @@ const MINI_HEIGHT  = 68;
 export function MiniPlayer() {
   const {
     track, isPlaying, position, duration,
-    visible, play, pause, setPosition, dismiss,
+    visible, play, pause, seek, updatePosition, dismiss,
   } = usePlayerStore();
 
   const segments = useSegments();
@@ -47,12 +47,16 @@ export function MiniPlayer() {
     onStartShouldSetPanResponder: () => true,
     onPanResponderGrant: (e) => {
       const ratio = Math.max(0, Math.min(e.nativeEvent.locationX / W, 1));
-      setPosition(ratio * duration);
+      updatePosition(ratio * duration);
     },
     onPanResponderMove: (e) => {
       const ratio = Math.max(0, Math.min(e.nativeEvent.locationX / W, 1));
-      setPosition(ratio * duration);
+      updatePosition(ratio * duration);
     },
+    onPanResponderRelease: (e) => {
+      const ratio = Math.max(0, Math.min(e.nativeEvent.locationX / W, 1));
+      seek(ratio * duration);
+    }
   });
 
   return (
@@ -82,7 +86,7 @@ export function MiniPlayer() {
         {/* Contrôles */}
         <View style={s.controls}>
           <TouchableOpacity
-            onPress={() => setPosition(Math.max(0, position - 15))}
+            onPress={() => seek(Math.max(0, position - 15))}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Reculer 15s"
           >
@@ -103,7 +107,7 @@ export function MiniPlayer() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={() => setPosition(Math.min(duration, position + 15))}
+            onPress={() => seek(Math.min(duration, position + 15))}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Avancer 15s"
           >

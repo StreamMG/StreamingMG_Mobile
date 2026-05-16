@@ -195,7 +195,7 @@ export default function ProfileScreen() {
           />
         ) : (
           <View style={s.editCard}>
-            <Text style={s.editLabel}>Nouveau nom d'utilisateur</Text>
+            <Text style={s.editLabel}>{"Nouveau nom d'utilisateur"}</Text>
             <TextInput
               style={s.editInput}
               value={newUsername}

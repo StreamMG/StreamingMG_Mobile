@@ -14,7 +14,9 @@ console.log(`API Base URL: ${BASE_URL}/api`);
 export const apiClient = axios.create({
   baseURL: `${BASE_URL}/api`,
   timeout: 10000,
-  headers: { 'Content-Type': 'application/json' },
+  headers: { 'Content-Type': 'application/json' ,
+            'Accept': 'application/json'
+  },
 });
 
   // console.log("ééééééééééééééééééééééééééééééé")

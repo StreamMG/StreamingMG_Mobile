@@ -33,9 +33,9 @@
   export default function HomeScreen() {
     const { data, loading, error, refresh } = useHomeData();
     
-    console.log("- - - - - - - - - -  -- - -- - - - - - - - - - - -");
-    console.log(data);
-    console.log("- - - - - - - - - -  -- - -- - - - - - - - - - - -");
+    // console.log("- - - - - - - - - -  -- - -- - - - - - - - - - - -");
+    // console.log(data);
+    // console.log("- - - - - - - - - -  -- - -- - - - - - - - - - - -");
 
     const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 

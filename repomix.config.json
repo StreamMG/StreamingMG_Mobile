@@ -1,0 +1,38 @@
+{
+  "include": [
+    "app/player/video/**/*",
+    "app/download/**/*",
+    "app/(options)/download.tsx",
+    "app/offline.tsx",
+    "app/content/[id].tsx",
+    "app/_layout.tsx",
+    "components/player/**/*",
+    "hooks/useDownload.ts",
+    "hooks/useContentDetail.ts",
+    "components/content/useContentDetail.ts",
+    "stores/downloadStore.ts",
+    "stores/playerStore.ts",
+    "lib/apiClient.ts",
+    "package.json",
+    "tsconfig.json",
+    "app.json",
+    "tailwind.config.js",
+    "metro.config.js",
+    "babel.config.js",
+    "eslint.config.js"
+  ],
+  "ignore": {
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/.git/**",
+      "**/.expo/**",
+      "**/.vscode/**",
+      "**/*.zip",
+      "package-lock.json"
+    ]
+  },
+  "output": {
+    "filePath": "repomix-output.txt",
+    "style": "markdown"
+  }
+}
