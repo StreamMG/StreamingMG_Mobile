@@ -15,6 +15,8 @@
  * Tous les fichiers importent cette constante depuis ici.
  * Ne plus écrire "localhost:3001" nulle part ailleurs.
  */
+
+
 console.log("- - - - - - - - - --  -- - - - -")
 console.log("URL de base API (mobile) :", process.env.EXPO_PUBLIC_LOCAL_URL)
 export const BASE_URL = __DEV__

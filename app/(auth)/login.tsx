@@ -95,6 +95,8 @@ export default function LoginScreen() {
       console.log(err)
       const status = err?.response?.status;
       const code = err?.response?.data?.code;
+      console.log("Status:", status);
+      console.log("Error code:", code);
 
       if (status === 401 && code === 'INVALID_CREDENTIALS') {
         setErrors({ global: 'Email ou mot de passe incorrect' });
